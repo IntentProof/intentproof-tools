@@ -33,13 +33,16 @@ func HashInternal(left, right []byte) []byte {
 	return h.Sum(nil)
 }
 
+// EmptyTreeHash is the RFC 6962 empty-tree hash (SHA-256 of nil input).
+var EmptyTreeHash = sha256.Sum256(nil)
+
 // Root computes the Merkle root over a slice of leaf data items.
 // It applies RFC 6962 domain separation and handles odd-length levels by
 // promoting the last node (no duplication).
-// Returns nil for an empty leaf set.
+// For an empty leaf set, returns the RFC 6962 empty-tree hash.
 func Root(leaves [][]byte) []byte {
 	if len(leaves) == 0 {
-		return nil
+		return EmptyTreeHash[:]
 	}
 
 	level := make([][]byte, len(leaves))
@@ -63,11 +66,7 @@ func Root(leaves [][]byte) []byte {
 }
 
 // RootHex computes the Merkle root and formats it as a hex string with the
-// "sha256:" prefix. Returns the all-zero sha256 string for an empty input.
+// "sha256:" prefix.
 func RootHex(leaves [][]byte) string {
-	root := Root(leaves)
-	if root == nil {
-		return "sha256:" + hex.EncodeToString(make([]byte, sha256.Size))
-	}
-	return "sha256:" + hex.EncodeToString(root)
+	return "sha256:" + hex.EncodeToString(Root(leaves))
 }

@@ -3,16 +3,17 @@ package merkle
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
 	"testing"
 )
 
 func TestRootEmpty(t *testing.T) {
+	// RFC 6962 empty-tree hash is SHA-256 of empty input.
+	want := sha256.Sum256(nil)
 	root := Root([][]byte{})
-	if root != nil {
-		t.Fatalf("expected nil for empty leaves, got %x", root)
+	if !bytes.Equal(root, want[:]) {
+		t.Fatalf("empty root mismatch: got %x, want %x", root, want)
 	}
-	if got := RootHex([][]byte{}); got != "sha256:"+hexZeroes() {
+	if got := RootHex([][]byte{}); got != "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
 		t.Fatalf("unexpected empty hex root: %s", got)
 	}
 }
@@ -152,6 +153,4 @@ func TestRootSecondPreimageResistance(t *testing.T) {
 	}
 }
 
-func hexZeroes() string {
-	return hex.EncodeToString(make([]byte, sha256.Size))
-}
+
