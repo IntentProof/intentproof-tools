@@ -215,6 +215,10 @@ func evaluateRule(r rule, events []event, atts []attestation) map[string]interfa
 		return evaluateTemporal(r, events)
 	case "consensus":
 		return evaluateConsensus(r, atts)
+	case "value_bound":
+		return evaluateValueBound(r, atts)
+	case "claim_match":
+		return evaluateClaimMatch(r, atts)
 	default:
 		return finding(r, "inconclusive", fmt.Sprintf("unknown rule category: %s", r.Category), nil)
 	}
@@ -542,6 +546,137 @@ func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
 	}
 
 	return finding(r, "pass", fmt.Sprintf("consensus: %d/%d attestations agree on claim %q", agreeCount, len(matchedAtts), claim), evidenceIDs)
+}
+
+func evaluateValueBound(r rule, atts []attestation) map[string]interface{} {
+	spec := r.Spec
+	claim, _ := spec["claim"].(string)
+	operator, _ := spec["operator"].(string)
+	sourceID, _ := spec["source_id"].(string)
+
+	if claim == "" || operator == "" {
+		return finding(r, "inconclusive", "value_bound: claim and operator are required", nil)
+	}
+
+	// Validate operator is supported.
+	if !isValidValueBoundOperator(operator) {
+		return finding(r, "inconclusive", fmt.Sprintf("value_bound: unsupported operator %q", operator), nil)
+	}
+
+	// Validate bound value exists and is numeric.
+	boundValue, ok := toFloat64(spec["value"])
+	if !ok {
+		return finding(r, "inconclusive", "value_bound: spec value must be numeric", nil)
+	}
+
+	matched := filterAttestations(atts, claim, sourceID)
+	if len(matched) == 0 {
+		return finding(r, "fail", fmt.Sprintf("value_bound: no attestations found for claim %q", claim), nil)
+	}
+
+	var evidence []string
+	failCount := 0
+	for _, a := range matched {
+		evidence = append(evidence, a.AttestationID)
+		num, ok := toFloat64(a.ClaimValue)
+		if !ok {
+			failCount++
+			continue
+		}
+		if !compareValueBound(num, operator, boundValue) {
+			failCount++
+		}
+	}
+
+	if failCount > 0 {
+		return finding(r, "fail", fmt.Sprintf("value_bound: %d/%d attestations violate %s %v for claim %q", failCount, len(matched), operator, boundValue, claim), evidence)
+	}
+	return finding(r, "pass", fmt.Sprintf("value_bound: all %d attestations satisfy %s %v for claim %q", len(matched), operator, boundValue, claim), evidence)
+}
+
+func isValidValueBoundOperator(op string) bool {
+	switch op {
+	case "lt", "lte", "gt", "gte", "eq", "ne":
+		return true
+	}
+	return false
+}
+
+func evaluateClaimMatch(r rule, atts []attestation) map[string]interface{} {
+	spec := r.Spec
+	claim, _ := spec["claim"].(string)
+	expectedValue := spec["expected_value"]
+	sourceID, _ := spec["source_id"].(string)
+
+	if claim == "" {
+		return finding(r, "inconclusive", "claim_match: claim is required", nil)
+	}
+	if expectedValue == nil {
+		return finding(r, "inconclusive", "claim_match: expected_value is required", nil)
+	}
+
+	matched := filterAttestations(atts, claim, sourceID)
+	if len(matched) == 0 {
+		return finding(r, "fail", fmt.Sprintf("claim_match: no attestations found for claim %q", claim), nil)
+	}
+
+	var evidence []string
+	failCount := 0
+	for _, a := range matched {
+		evidence = append(evidence, a.AttestationID)
+		if !valuesEqual(a.ClaimValue, expectedValue) {
+			failCount++
+		}
+	}
+
+	if failCount > 0 {
+		return finding(r, "fail", fmt.Sprintf("claim_match: %d/%d attestations do not match expected value for claim %q", failCount, len(matched), claim), evidence)
+	}
+	return finding(r, "pass", fmt.Sprintf("claim_match: all %d attestations match expected value for claim %q", len(matched), claim), evidence)
+}
+
+func filterAttestations(atts []attestation, claim, sourceID string) []attestation {
+	matched := make([]attestation, 0)
+	for _, a := range atts {
+		if a.Claim != claim {
+			continue
+		}
+		if sourceID != "" && a.SourceID != sourceID {
+			continue
+		}
+		matched = append(matched, a)
+	}
+	return matched
+}
+
+func toFloat64(v interface{}) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	}
+	return 0, false
+}
+
+func compareValueBound(value float64, operator string, bound float64) bool {
+	switch operator {
+	case "lt":
+		return value < bound
+	case "lte":
+		return value <= bound
+	case "gt":
+		return value > bound
+	case "gte":
+		return value >= bound
+	case "eq":
+		return value == bound
+	case "ne":
+		return value != bound
+	}
+	return false
 }
 
 // Helpers
