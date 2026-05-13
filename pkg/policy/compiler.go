@@ -1,15 +1,13 @@
 package policy
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 
+	"github.com/intentproof/intentproof-tools/pkg/policysig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -160,7 +158,7 @@ func Compile(raw []byte) (*CompileResult, error) {
 		Rules: rules,
 	}
 
-	fingerprint, err := computeFingerprint(policy)
+	fingerprint, err := policysig.ComputeFingerprint(policy)
 	if err != nil {
 		return nil, err
 	}
@@ -350,27 +348,6 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 		Severity: severity,
 		Spec:     spec,
 	}, nil
-}
-
-func computeFingerprint(policy CanonicalPolicy) (string, error) {
-	raw, err := json.Marshal(policy)
-	if err != nil {
-		return "", err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return "", err
-	}
-	delete(m, "policy_fingerprint")
-	delete(m, "signed_at")
-	delete(m, "signature")
-
-	canonical, err := json.Marshal(m)
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(canonical)
-	return "sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
 func validateThreshold(threshold map[string]any) error {

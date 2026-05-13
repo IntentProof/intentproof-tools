@@ -3,6 +3,7 @@ package crypto
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
@@ -15,6 +16,15 @@ import (
 type LocalEd25519PolicySigner struct {
 	privateKey ed25519.PrivateKey
 	keyID      string
+}
+
+// NewLocalEd25519PolicySigner generates a new random Ed25519 signer for testing.
+func NewLocalEd25519PolicySigner() (PolicySigner, error) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("generate ed25519 key: %w", err)
+	}
+	return NewLocalEd25519PolicySignerFromBase64(base64.StdEncoding.EncodeToString(priv))
 }
 
 // NewLocalEd25519PolicySignerFromBase64 creates a signer from a base64-encoded
