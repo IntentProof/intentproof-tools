@@ -1,0 +1,17 @@
+# Command Drift Guardrails
+
+This document captures behavior-level invariants that refactors should preserve
+for the Tier 1 (Apache 2.0) command surfaces in this repository. Companion doc
+for Tier 2 commands lives in
+[intentproof-core/docs/command-drift-guardrails.md](https://github.com/intentproof/intentproof-core/blob/main/docs/command-drift-guardrails.md).
+
+## cmd/intentproof
+
+- Unknown top-level command returns exit code `1` and prints `Unknown command: <name>` to stderr.
+- Missing policy subcommand returns exit code `1` and prints `Usage: intentproof policy <subcommand>`.
+- `policy test` fixture output order is deterministic and alphabetical by fixture directory name.
+
+## cmd/intentproof-verify
+
+- Missing arguments return exit code `1` and print usage to stderr.
+- Missing input files return exit code `1` with `error: read <file>: ...` on stderr.
