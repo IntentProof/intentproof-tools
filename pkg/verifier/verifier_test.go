@@ -591,3 +591,54 @@ func TestVerifyValueBoundOperators(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyValueBoundMissingSpecValue(t *testing.T) {
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"lte"}}]}`)
+	atts := []byte(`{"attestation_id":"a1","source_id":"s1","claim":"score","claim_value":5}`)
+
+	run, err := Verify(flow, policy, atts)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if run.Status != "inconclusive" {
+		t.Fatalf("expected inconclusive, got %s", run.Status)
+	}
+	if run.Findings[0]["outcome"] != "inconclusive" {
+		t.Fatalf("expected finding inconclusive, got %v", run.Findings[0]["outcome"])
+	}
+}
+
+func TestVerifyValueBoundUnknownOperator(t *testing.T) {
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"unknown_op","value":10}}]}`)
+	atts := []byte(`{"attestation_id":"a1","source_id":"s1","claim":"score","claim_value":5}`)
+
+	run, err := Verify(flow, policy, atts)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if run.Status != "inconclusive" {
+		t.Fatalf("expected inconclusive, got %s", run.Status)
+	}
+	if run.Findings[0]["outcome"] != "inconclusive" {
+		t.Fatalf("expected finding inconclusive, got %v", run.Findings[0]["outcome"])
+	}
+}
+
+func TestVerifyValueBoundNonNumericSpecValue(t *testing.T) {
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"lte","value":"high"}}]}`)
+	atts := []byte(`{"attestation_id":"a1","source_id":"s1","claim":"score","claim_value":5}`)
+
+	run, err := Verify(flow, policy, atts)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if run.Status != "inconclusive" {
+		t.Fatalf("expected inconclusive, got %s", run.Status)
+	}
+	if run.Findings[0]["outcome"] != "inconclusive" {
+		t.Fatalf("expected finding inconclusive, got %v", run.Findings[0]["outcome"])
+	}
+}

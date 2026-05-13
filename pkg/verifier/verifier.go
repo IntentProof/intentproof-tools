@@ -552,11 +552,21 @@ func evaluateValueBound(r rule, atts []attestation) map[string]interface{} {
 	spec := r.Spec
 	claim, _ := spec["claim"].(string)
 	operator, _ := spec["operator"].(string)
-	boundValue, _ := spec["value"].(float64)
 	sourceID, _ := spec["source_id"].(string)
 
 	if claim == "" || operator == "" {
 		return finding(r, "inconclusive", "value_bound: claim and operator are required", nil)
+	}
+
+	// Validate operator is supported.
+	if !isValidValueBoundOperator(operator) {
+		return finding(r, "inconclusive", fmt.Sprintf("value_bound: unsupported operator %q", operator), nil)
+	}
+
+	// Validate bound value exists and is numeric.
+	boundValue, ok := toFloat64(spec["value"])
+	if !ok {
+		return finding(r, "inconclusive", "value_bound: spec value must be numeric", nil)
 	}
 
 	matched := filterAttestations(atts, claim, sourceID)
@@ -582,6 +592,14 @@ func evaluateValueBound(r rule, atts []attestation) map[string]interface{} {
 		return finding(r, "fail", fmt.Sprintf("value_bound: %d/%d attestations violate %s %v for claim %q", failCount, len(matched), operator, boundValue, claim), evidence)
 	}
 	return finding(r, "pass", fmt.Sprintf("value_bound: all %d attestations satisfy %s %v for claim %q", len(matched), operator, boundValue, claim), evidence)
+}
+
+func isValidValueBoundOperator(op string) bool {
+	switch op {
+	case "lt", "lte", "gt", "gte", "eq", "ne":
+		return true
+	}
+	return false
 }
 
 func evaluateClaimMatch(r rule, atts []attestation) map[string]interface{} {
