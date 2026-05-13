@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test ./...
+
+  tier-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ADR-010 dependency invariant
+        run: ./scripts/check-tier-isolation.sh
+
+  dco:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require Signed-off-by trailer on every commit
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          fail=0
+          for sha in $(git rev-list "$base".."$head"); do
+            if ! git log -1 --format=%B "$sha" | grep -qE '^Signed-off-by: .+ <.+@.+>$'; then
+              echo "Commit $sha is missing a Signed-off-by trailer." >&2
+              fail=1
+            fi
+          done
+          if [[ $fail -ne 0 ]]; then
+            echo "" >&2
+            echo "All commits in this PR must be signed off via the DCO." >&2
+            echo "See CONTRIBUTING.md. Use 'git commit -s' or amend with 'git commit --amend -s'." >&2
+            exit 1
+          fi
+          echo "PASS: all commits carry Signed-off-by trailers."
