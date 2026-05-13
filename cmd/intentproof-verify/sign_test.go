@@ -39,6 +39,7 @@ func TestSignRunAndVerify(t *testing.T) {
 	}
 
 	// Test without signer: output should still contain an empty signature envelope.
+	clearSigningEnv(t)
 	var stdout strings.Builder
 	var stderr strings.Builder
 	code := run([]string{"--output", outPath, flowPath, policyPath, attPath}, &stdout, &stderr)
@@ -75,6 +76,7 @@ func TestSignRunAndVerify(t *testing.T) {
 	}
 
 	// Test with a signer configured via env.
+	clearSigningEnv(t)
 	privKeyB64 := base64.StdEncoding.EncodeToString(newTestKey(t))
 	t.Setenv("INTENTPROOF_POLICY_SIGNING_KEY_B64", privKeyB64)
 	// Re-create signer from env to get the public key for verification.
@@ -143,4 +145,15 @@ func newTestKey(t *testing.T) []byte {
 		t.Fatalf("generate key: %v", err)
 	}
 	return priv
+}
+
+func clearSigningEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{
+		"INTENTPROOF_KMS_KEY_ID",
+		"INTENTPROOF_POLICY_SIGNING_KEY_B64",
+		"INTENTPROOF_POLICY_SIGNING_KEY_ID",
+	} {
+		t.Setenv(k, "")
+	}
 }

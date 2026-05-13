@@ -23,49 +23,45 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	fs.StringVar(&outputPath, "output", "", "write signed VerificationRun JSON to path")
 	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
-		return 1
+		return writeError(stderr, "error: %v\n", err)
 	}
 	remaining := fs.Args()
 	if len(remaining) < 3 {
-		fmt.Fprintln(stderr, "Usage: intentproof-verify [--output <path>] <flow.json> <policy.json> <attestations.jsonl>")
+		_, _ = fmt.Fprintln(stderr, "Usage: intentproof-verify [--output <path>] <flow.json> <policy.json> <attestations.jsonl>")
 		return 1
 	}
 
 	flowData, err := readInputFile(remaining[0])
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
-		return 1
+		return writeError(stderr, "error: %v\n", err)
 	}
 	policyData, err := readInputFile(remaining[1])
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
-		return 1
+		return writeError(stderr, "error: %v\n", err)
 	}
 	attestationsData, err := readInputFile(remaining[2])
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
-		return 1
+		return writeError(stderr, "error: %v\n", err)
 	}
 
 	vr, err := verifier.Verify(flowData, policyData, attestationsData)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
-		return 1
+		return writeError(stderr, "error: %v\n", err)
 	}
 
-	signer, _ := crypto.NewPolicySignerFromEnv()
+	signer, err := crypto.NewPolicySignerFromEnv()
+	if err != nil {
+		return writeError(stderr, "error: load signer: %v\n", err)
+	}
 	if signer != nil {
 		canonical, err := verifier.CanonicalRunJSON(vr)
 		if err != nil {
-			fmt.Fprintf(stderr, "error: canonicalize run: %v\n", err)
-			return 1
+			return writeError(stderr, "error: canonicalize run: %v\n", err)
 		}
 		digest := crypto.DigestSHA256(canonical)
 		env, err := signer.Sign(context.Background(), digest)
 		if err != nil {
-			fmt.Fprintf(stderr, "error: sign run: %v\n", err)
-			return 1
+			return writeError(stderr, "error: sign run: %v\n", err)
 		}
 		vr.Signature = map[string]interface{}{
 			"alg":    env.Alg,
@@ -77,18 +73,21 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if outputPath != "" {
 		raw, err := json.MarshalIndent(vr, "", "  ")
 		if err != nil {
-			fmt.Fprintf(stderr, "error: marshal run: %v\n", err)
-			return 1
+			return writeError(stderr, "error: marshal run: %v\n", err)
 		}
 		if err := os.WriteFile(outputPath, raw, 0o644); err != nil {
-			fmt.Fprintf(stderr, "error: write output: %v\n", err)
-			return 1
+			return writeError(stderr, "error: write output: %v\n", err)
 		}
 		return 0
 	}
 
-	fmt.Fprintf(stdout, "Run Status: %s\n", vr.Status)
+	_, _ = fmt.Fprintf(stdout, "Run Status: %s\n", vr.Status)
 	return 0
+}
+
+func writeError(w io.Writer, format string, a ...any) int {
+	_, _ = fmt.Fprintf(w, format, a...)
+	return 1
 }
 
 func readInputFile(path string) ([]byte, error) {
