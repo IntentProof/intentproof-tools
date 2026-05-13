@@ -12,15 +12,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read pinned spec ref
+        id: spec_ref
+        run: echo "ref=$(cat SPEC_REF)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout intentproof-spec at pinned ref
+        uses: actions/checkout@v4
+        with:
+          repository: IntentProof/intentproof-spec
+          ref: ${{ steps.spec_ref.outputs.ref }}
+          path: intentproof-spec
+
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
 
       - name: go build
         run: go build ./...
 
       - name: go test
         run: go test ./...
+
+      - name: Verify policy compiler against pinned spec schema
+        run: INTENTPROOF_SPEC_DIR=./intentproof-spec ./scripts/check-spec-conformance.sh
 
   tier-isolation:
     runs-on: ubuntu-latest
