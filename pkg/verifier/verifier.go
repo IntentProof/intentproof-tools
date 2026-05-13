@@ -2,7 +2,6 @@ package verifier
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/intentproof/intentproof-tools/pkg/merkle"
 )
 
 // nowFunc is swappable for deterministic tests.
@@ -854,43 +855,12 @@ func validateAgreeAtLeast(v interface{}) (int, error) {
 }
 
 func computeMerkleRoot(ids []string) string {
-	if len(ids) == 0 {
-		return "sha256:" + strings.Repeat("0", 64)
-	}
 	sort.Strings(ids)
-
-	// Build leaf hashes with length-prefixed encoding to avoid ambiguity.
 	leaves := make([][]byte, len(ids))
 	for i, id := range ids {
-		h := sha256.New()
-		lengthPrefix := make([]byte, 8)
-		binary.BigEndian.PutUint64(lengthPrefix, uint64(len(id)))
-		_, _ = h.Write(lengthPrefix)
-		_, _ = h.Write([]byte(id))
-		leaves[i] = h.Sum(nil)
+		leaves[i] = []byte(id)
 	}
-
-	// Iteratively pair and hash until a single root remains.
-	level := leaves
-	for len(level) > 1 {
-		next := make([][]byte, 0, (len(level)+1)/2)
-		for i := 0; i < len(level); i += 2 {
-			if i+1 < len(level) {
-				h := sha256.New()
-				_, _ = h.Write(level[i])
-				_, _ = h.Write(level[i+1])
-				next = append(next, h.Sum(nil))
-			} else {
-				// Odd number: duplicate the last node.
-				h := sha256.New()
-				_, _ = h.Write(level[i])
-				_, _ = h.Write(level[i])
-				next = append(next, h.Sum(nil))
-			}
-		}
-		level = next
-	}
-	return "sha256:" + hex.EncodeToString(level[0])
+	return merkle.RootHex(leaves)
 }
 
 func computeRunFingerprint(run *VerificationRun) (string, error) {
