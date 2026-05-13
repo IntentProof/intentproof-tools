@@ -894,26 +894,31 @@ func computeMerkleRoot(ids []string) string {
 }
 
 func computeRunFingerprint(run *VerificationRun) (string, error) {
-	// Build a copy excluding fingerprint and signature fields.
-	raw, err := json.Marshal(run)
-	if err != nil {
-		return "", err
-	}
-	var m map[string]interface{}
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return "", err
-	}
-	delete(m, "run_fingerprint")
-	delete(m, "signature")
-	delete(m, "started_at")
-	delete(m, "completed_at")
-
-	canonical, err := canonicalJSON(m)
+	canonical, err := CanonicalRunJSON(run)
 	if err != nil {
 		return "", err
 	}
 	digest := sha256.Sum256(canonical)
 	return "sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+// CanonicalRunJSON returns the canonical JSON representation of a run,
+// excluding mutable or self-referential fields (fingerprint, signature,
+// timestamps) so that signing and fingerprinting are deterministic.
+func CanonicalRunJSON(run *VerificationRun) ([]byte, error) {
+	raw, err := json.Marshal(run)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, err
+	}
+	delete(m, "run_fingerprint")
+	delete(m, "signature")
+	delete(m, "started_at")
+	delete(m, "completed_at")
+	return canonicalJSON(m)
 }
 
 func parseISODuration(s string) (time.Duration, error) {
