@@ -13,8 +13,12 @@ import (
 )
 
 func startLocalServer() error {
-	dataDir := filepath.Join(os.Getenv("HOME"), ".intentproof", "local")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("home dir: %w", err)
+	}
+	dataDir := filepath.Join(home, ".intentproof", "local")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
@@ -25,13 +29,13 @@ func startLocalServer() error {
 	}
 	defer db.Close()
 
-	nats, err := localloop.StartEmbeddedNATS()
+	nats, err := localloop.StartEmbeddedNATS(dataDir)
 	if err != nil {
 		return fmt.Errorf("start nats: %w", err)
 	}
 	defer nats.Shutdown()
 
-	ingestAddr := ":9786"
+	ingestAddr := ":9787"
 	if v := os.Getenv("INTENTPROOF_LOCAL_INGEST_ADDR"); v != "" {
 		ingestAddr = v
 	}
@@ -55,9 +59,9 @@ func startLocalServer() error {
 	fmt.Println("starting flow builder")
 	fmt.Println("NATS URL:", nats.URL())
 	fmt.Println()
-	fmt.Println("Ingest endpoint:", ingestURL)
+	fmt.Println("Ingest endpoint:", ingestURL+"/v1/events")
 	fmt.Println("NATS endpoint:  ", nats.URL())
-	fmt.Println("\nWhen you run code with INTENTPROOF_INGEST_URL="+ingestURL+",")
+	fmt.Println("\nWhen you run code with INTENTPROOF_INGEST_URL=" + ingestURL + "/v1/events,")
 	fmt.Println("events flow in real-time. Ctrl-C to stop.")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -23,11 +23,13 @@ func NewFlowBuilder(db *sql.DB, nats *NATSWrapper) *FlowBuilder {
 // Run starts the flow builder subscription. It blocks until the context is
 // cancelled.
 func (fb *FlowBuilder) Run(ctx context.Context) error {
-	sub, err := fb.nats.SubscribeEventCommitted(func(msg *nats.Msg) {
+	sub, err := fb.nats.SubscribeEventCommitted(ctx, func(msg *nats.Msg) {
 		if err := fb.handle(ctx, msg.Data); err != nil {
-			// In local mode we log and continue; no redelivery guarantee.
 			fmt.Printf("flowbuilder: handle error: %v\n", err)
+			_ = msg.Nak()
+			return
 		}
+		_ = msg.Ack()
 	})
 	if err != nil {
 		return fmt.Errorf("subscribe: %w", err)
