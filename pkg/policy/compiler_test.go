@@ -188,6 +188,35 @@ func TestCompileForbiddenPredecessorMutex(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	// An explicitly empty where_predecessor map must count as "set" for the
+	// mutex and after-requirement checks; otherwise users could bypass the
+	// guard by writing `where_predecessor: {}`.
+	t.Run("treats empty where_predecessor map as set for requires-after", func(t *testing.T) {
+		raw := wrap(`  - id: f1
+    type: forbidden
+    action: demo.action
+    where_predecessor: {}
+`)
+		_, err := Compile(raw)
+		if err == nil || !strings.Contains(err.Error(), "requires after") {
+			t.Fatalf("expected requires-after error, got: %v", err)
+		}
+	})
+
+	t.Run("treats empty where_predecessor map as set for mutex", func(t *testing.T) {
+		raw := wrap(`  - id: f1
+    type: forbidden
+    action: demo.action
+    after: demo.action
+    where_predecessor: {}
+    without_predecessor: demo.cancel
+`)
+		_, err := Compile(raw)
+		if err == nil || !strings.Contains(err.Error(), "cannot set both") {
+			t.Fatalf("expected mutex error, got: %v", err)
+		}
+	})
 }
 
 // TestCompileWhereJSONSafe verifies that compiled rule specs marshal cleanly
@@ -462,6 +491,45 @@ func TestCompileClaimMatchCanonicalSpec(t *testing.T) {
 	}
 	if got, _ := rule.Spec["require_signed"].(bool); !got {
 		t.Fatalf("require_signed: %v", rule.Spec["require_signed"])
+	}
+}
+
+// When a claim_match rule sets both require_signed and require_signed_sources
+// to conflicting values, the compiler must reject the policy rather than
+// silently prefer one alias.
+func TestCompileClaimMatchRejectsConflictingRequireSignedAliases(t *testing.T) {
+	raw := wrap(`  - id: r1
+    type: claim_match
+    claim: refund.status
+    expected_value: succeeded
+    require_signed: true
+    require_signed_sources: false
+`)
+	_, err := Compile(raw)
+	if err == nil {
+		t.Fatal("expected error for conflicting aliases")
+	}
+	if !strings.Contains(err.Error(), "conflicting") {
+		t.Fatalf("error should call out conflict, got: %v", err)
+	}
+}
+
+// When both aliases agree, the policy compiles and the canonical
+// `require_signed` field reflects the agreed value.
+func TestCompileClaimMatchAcceptsAgreeingRequireSignedAliases(t *testing.T) {
+	raw := wrap(`  - id: r1
+    type: claim_match
+    claim: refund.status
+    expected_value: succeeded
+    require_signed: true
+    require_signed_sources: true
+`)
+	res, err := Compile(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, _ := res.Policy.Rules[0].Spec["require_signed"].(bool); !got {
+		t.Fatalf("require_signed: %v", res.Policy.Rules[0].Spec["require_signed"])
 	}
 }
 

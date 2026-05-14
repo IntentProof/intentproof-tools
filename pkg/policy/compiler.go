@@ -231,7 +231,7 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 		if rule.Action == "" {
 			return CanonicalRule{}, errors.New("forbidden rule needs action")
 		}
-		hasWherePred := len(rule.WherePredecessor) > 0
+		hasWherePred := rule.WherePredecessor != nil
 		hasWithoutPred := rule.WithoutPredecessor != ""
 		if hasWherePred && hasWithoutPred {
 			return CanonicalRule{}, errors.New(
@@ -392,6 +392,13 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 		spec["expected_value"] = normalizeMap(rule.ExpectedValue)
 		if rule.SourceID != "" {
 			spec["source_id"] = rule.SourceID
+		}
+		if rule.RequireSignedAlias != nil && rule.RequireSigned != nil &&
+			*rule.RequireSignedAlias != *rule.RequireSigned {
+			return CanonicalRule{}, errors.New(
+				"claim_match rule sets conflicting values for " +
+					"require_signed and require_signed_sources",
+			)
 		}
 		if rule.RequireSignedAlias != nil {
 			spec["require_signed"] = *rule.RequireSignedAlias
