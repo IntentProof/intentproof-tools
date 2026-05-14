@@ -17,8 +17,8 @@ limitations under the License.
 
 ---
 
-This repository contains the Apache 2.0-licensed Tier 1 surface of
-IntentProof as defined in plan-intentproof/decisions/ADR-010-licensing-and-ip-strategy.md:
+This repository contains the Apache 2.0-licensed Tier 1
+("audit contract") surface of IntentProof:
 
     - cmd/intentproof-verify  (offline verifier binary)
     - cmd/intentproof         (developer CLI)

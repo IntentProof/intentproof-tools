@@ -10,8 +10,8 @@ import (
 //
 // The canonical set is mirrored from intentproof-core (query-api/types.go).
 // Tools is Tier 1, so the set is duplicated here rather than imported.
-// If the canonical set ever needs to grow, update both sides in lockstep
-// (the Tier 1 surface is the authoritative contract per ADR-010).
+// If the canonical set ever needs to grow, update both sides in lockstep;
+// the Tier 1 surface here is the authoritative contract.
 type KeyStatus string
 
 const (

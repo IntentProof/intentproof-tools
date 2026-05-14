@@ -5,11 +5,18 @@ verifier, developer CLI, policy compiler, bundle format, and crypto
 primitives that any customer, regulator, or competitor must be able
 to run forever without asking permission.
 
-This repository is governed by
-[ADR-010 — Licensing and IP strategy](https://github.com/intentproof/plan-intentproof/blob/main/decisions/ADR-010-licensing-and-ip-strategy.md).
+This repository is the Tier 1 audit-contract surface of IntentProof.
 The Tier 1 / Tier 2 / Tier 3 split, the BSL-1.1-with-4-year-Apache
 conversion of `intentproof-core`, and the no-Tier-1-imports-Tier-2
-invariant all live there.
+dependency invariant are normative for this repository:
+
+- Tier 1 code (this repo) is Apache 2.0 and must remain depend-
+  able by anyone, forever, without permission.
+- Tier 2 code (`intentproof-core`) is BSL 1.1 today and converts
+  to Apache 2.0 on a 4-year cadence.
+- Tier 1 packages here MUST NOT import any
+  `github.com/intentproof/intentproof-core/...` package. CI
+  enforces this; see `scripts/check-tier-isolation.sh`.
 
 ## What is in here
 

@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: ADR-010 dependency invariant
+      - name: Tier dependency invariant
         run: ./scripts/check-tier-isolation.sh
 
   dco:

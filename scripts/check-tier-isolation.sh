@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Enforce ADR-010 dependency invariant:
+# Enforce the Tier 1 -> Tier 2 dependency invariant:
 #   Tier 1 (this repo, Apache 2.0) MUST NOT import Tier 2 code.
 #
 # Tier 2 = github.com/intentproof/intentproof-core/...
 #
 # This is the load-bearing license-laundering guard. Do not weaken
-# without revisiting ADR-010.
+# this script without a corresponding licensing decision.
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ violations="$(grep -rEn \
     . 2>/dev/null || true)"
 
 if [[ -n "$violations" ]]; then
-    echo "ADR-010 violation: Tier 1 (intentproof-tools) must not import Tier 2 (intentproof-core)." >&2
+    echo "Tier dependency violation: Tier 1 (intentproof-tools) must not import Tier 2 (intentproof-core)." >&2
     echo "" >&2
     echo "Offending imports:" >&2
     echo "$violations" >&2

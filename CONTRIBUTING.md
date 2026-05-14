@@ -68,8 +68,10 @@ for the certification-mark policy.
 - Tests first. The product is a verification engine; testing is the
   core deliverable.
 - No imports of `github.com/intentproof/intentproof-core/...` are
-  permitted. CI will reject them. See ADR-010 for the dependency
-  invariant rationale.
+  permitted in this repository. CI rejects them via
+  `scripts/check-tier-isolation.sh`. The invariant exists so this
+  audit-contract surface remains Apache 2.0 and independently
+  buildable, even when the operational data plane evolves.
 
 ## License
 
