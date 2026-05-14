@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/merkle"
@@ -85,10 +86,14 @@ func OpenDB(path string) (*sql.DB, error) {
 	return db, nil
 }
 
+func normalizePrevEventHash(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
 func checkChain(ctx context.Context, tx *sql.Tx, ev ExecutionEvent) error {
 	sentinel := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 	if ev.ChainPosition == 1 {
-		if ev.PrevEventHash != sentinel {
+		if normalizePrevEventHash(ev.PrevEventHash) != sentinel {
 			return fmt.Errorf("%w: first event prev_event_hash must be %s", ErrChainConflict, sentinel)
 		}
 		return nil
@@ -107,8 +112,8 @@ func checkChain(ctx context.Context, tx *sql.Tx, ev ExecutionEvent) error {
 		return err
 	}
 
-	prefix := "sha256:" + hex.EncodeToString(prevHash)
-	if ev.PrevEventHash != prefix {
+	want := "sha256:" + hex.EncodeToString(prevHash)
+	if normalizePrevEventHash(ev.PrevEventHash) != want {
 		return fmt.Errorf("%w: prev_event_hash mismatch", ErrChainConflict)
 	}
 	return nil

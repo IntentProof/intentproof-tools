@@ -74,7 +74,7 @@ func (s *IngestServer) handleV1Events(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	inserted, err := StoreEvent(ctx, s.DB, ev, hash[:])
+	_, err = StoreEvent(ctx, s.DB, ev, hash[:])
 	if err != nil {
 		if errors.Is(err, ErrChainConflict) {
 			w.WriteHeader(http.StatusConflict)
@@ -84,7 +84,10 @@ func (s *IngestServer) handleV1Events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if inserted && s.NATS != nil {
+	// Always publish after a successful store attempt (including idempotent
+	// duplicates) so client retries self-heal when NATS publish failed after DB
+	// commit.
+	if s.NATS != nil {
 		env := CommitEnvelope{
 			TenantID:      ev.TenantID,
 			EventID:       ev.EventID,
@@ -113,10 +116,11 @@ func validateEvent(ev ExecutionEvent) error {
 	if ev.Signature.Alg != "ed25519" || ev.Signature.Value == "" {
 		return fmt.Errorf("invalid signature envelope")
 	}
-	if !strings.HasPrefix(ev.PrevEventHash, "sha256:") {
+	norm := normalizePrevEventHash(ev.PrevEventHash)
+	if !strings.HasPrefix(norm, "sha256:") {
 		return fmt.Errorf("prev_event_hash must use sha256 prefix")
 	}
-	hexPart := strings.TrimPrefix(ev.PrevEventHash, "sha256:")
+	hexPart := strings.TrimPrefix(norm, "sha256:")
 	if len(hexPart) != 64 {
 		return fmt.Errorf("prev_event_hash must be 64 hex digits after prefix")
 	}
