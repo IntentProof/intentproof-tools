@@ -5,12 +5,16 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/merkle"
 	_ "modernc.org/sqlite"
 )
+
+// ErrChainConflict means the event does not extend the existing chain.
+var ErrChainConflict = errors.New("localloop: chain conflict")
 
 const schemaSQL = `
 CREATE TABLE IF NOT EXISTS execution_events (
@@ -65,24 +69,74 @@ func OpenDB(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	if _, err := db.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("pragma busy_timeout: %w", err)
+	}
 	if _, err := db.Exec(schemaSQL); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
+	if _, err := db.Exec(`PRAGMA journal_mode = WAL`); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("pragma journal_mode: %w", err)
+	}
+	db.SetMaxOpenConns(1)
 	return db, nil
 }
 
+func checkChain(ctx context.Context, tx *sql.Tx, ev ExecutionEvent) error {
+	sentinel := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	if ev.ChainPosition == 1 {
+		if ev.PrevEventHash != sentinel {
+			return fmt.Errorf("%w: first event prev_event_hash must be %s", ErrChainConflict, sentinel)
+		}
+		return nil
+	}
+
+	var prevHash []byte
+	err := tx.QueryRowContext(ctx, `
+		SELECT event_hash FROM execution_events
+		WHERE tenant_id = ? AND instance_id = ? AND correlation_id = ? AND chain_position = ?`,
+		ev.TenantID, ev.InstanceID, ev.CorrelationID, ev.ChainPosition-1,
+	).Scan(&prevHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: previous event missing (chain gap)", ErrChainConflict)
+		}
+		return err
+	}
+
+	prefix := "sha256:" + hex.EncodeToString(prevHash)
+	if ev.PrevEventHash != prefix {
+		return fmt.Errorf("%w: prev_event_hash mismatch", ErrChainConflict)
+	}
+	return nil
+}
+
 // StoreEvent persists an ExecutionEvent with its computed SHA-256 hash.
-func StoreEvent(ctx context.Context, db *sql.DB, ev ExecutionEvent, eventHash []byte) error {
+// It returns inserted=false when the row already existed (idempotent no-op).
+func StoreEvent(ctx context.Context, db *sql.DB, ev ExecutionEvent, eventHash []byte) (inserted bool, err error) {
 	bodyBytes, err := json.Marshal(ev)
 	if err != nil {
-		return fmt.Errorf("marshal event body: %w", err)
+		return false, fmt.Errorf("marshal event body: %w", err)
 	}
 	sigBytes, err := json.Marshal(ev.Signature)
 	if err != nil {
-		return fmt.Errorf("marshal signature: %w", err)
+		return false, fmt.Errorf("marshal signature: %w", err)
 	}
-	_, err = db.ExecContext(ctx, `
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := checkChain(ctx, tx, ev); err != nil {
+		return false, err
+	}
+
+	res, err := tx.ExecContext(ctx, `
 		INSERT INTO execution_events (
 		  tenant_id, event_id, correlation_id, instance_id, chain_position,
 		  prev_event_hash, event_hash, action, status, started_at, completed_at,
@@ -95,9 +149,16 @@ func StoreEvent(ctx context.Context, db *sql.DB, ev ExecutionEvent, eventHash []
 		ev.DurationMS, ev.SpecVersion, string(bodyBytes), string(sigBytes),
 	)
 	if err != nil {
-		return fmt.Errorf("insert event: %w", err)
+		return false, fmt.Errorf("insert event: %w", err)
 	}
-	return nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("rows affected: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // EventRow is a lightweight representation of an event for flow building.

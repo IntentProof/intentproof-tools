@@ -6,7 +6,7 @@ import (
 )
 
 func TestEmbeddedNATSStarts(t *testing.T) {
-	w, err := StartEmbeddedNATS()
+	w, err := StartEmbeddedNATS(t.TempDir())
 	if err != nil {
 		t.Fatalf("start nats: %v", err)
 	}

@@ -60,20 +60,22 @@ func TestLocalAcceptance(t *testing.T) {
 	}()
 
 	// Wait for the ingest HTTP endpoint to come up (max 10s).
-	ingestURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	ingestBase := fmt.Sprintf("http://127.0.0.1:%d", port)
 	client := &http.Client{Timeout: 2 * time.Second}
 	ready := false
 	for i := 0; i < 100; i++ {
 		time.Sleep(100 * time.Millisecond)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, ingestURL, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, ingestBase+"/healthz", nil)
 		if err != nil {
 			t.Fatalf("build readiness request: %v", err)
 		}
 		resp, err := client.Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
-			ready = true
-			break
+			if resp.StatusCode == http.StatusOK {
+				ready = true
+				break
+			}
 		}
 	}
 	if !ready {
@@ -99,7 +101,7 @@ func TestLocalAcceptance(t *testing.T) {
 		Signature: localloop.Signature{
 			Alg:   "ed25519",
 			KeyID: "local",
-			Value: "dummysig",
+			Value: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
 		},
 	}
 	body, err := json.Marshal(event)
@@ -107,7 +109,7 @@ func TestLocalAcceptance(t *testing.T) {
 		t.Fatalf("marshal event: %v", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ingestURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ingestBase+"/v1/events", bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("build post request: %v", err)
 	}
