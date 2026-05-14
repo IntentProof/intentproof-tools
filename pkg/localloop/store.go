@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS execution_events (
 CREATE INDEX IF NOT EXISTS idx_events_correlation
 ON execution_events(tenant_id, correlation_id, chain_position);
 
+CREATE UNIQUE INDEX IF NOT EXISTS ux_events_chain_slot
+ON execution_events(tenant_id, instance_id, correlation_id, chain_position);
+
 CREATE TABLE IF NOT EXISTS flows (
     tenant_id TEXT NOT NULL,
     flow_id TEXT NOT NULL,
@@ -96,27 +99,75 @@ func checkChain(ctx context.Context, tx *sql.Tx, ev ExecutionEvent) error {
 		if normalizePrevEventHash(ev.PrevEventHash) != sentinel {
 			return fmt.Errorf("%w: first event prev_event_hash must be %s", ErrChainConflict, sentinel)
 		}
-		return nil
+	} else {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT event_hash FROM execution_events
+			WHERE tenant_id = ? AND instance_id = ? AND correlation_id = ? AND chain_position = ?
+			ORDER BY event_id ASC`,
+			ev.TenantID, ev.InstanceID, ev.CorrelationID, ev.ChainPosition-1,
+		)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		var prevHash []byte
+		n := 0
+		for rows.Next() {
+			n++
+			if err := rows.Scan(&prevHash); err != nil {
+				return err
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		switch n {
+		case 0:
+			return fmt.Errorf("%w: previous event missing (chain gap)", ErrChainConflict)
+		case 1:
+			want := "sha256:" + hex.EncodeToString(prevHash)
+			if normalizePrevEventHash(ev.PrevEventHash) != want {
+				return fmt.Errorf("%w: prev_event_hash mismatch", ErrChainConflict)
+			}
+		default:
+			return fmt.Errorf("%w: forked chain at previous position", ErrChainConflict)
+		}
 	}
 
-	var prevHash []byte
-	err := tx.QueryRowContext(ctx, `
-		SELECT event_hash FROM execution_events
-		WHERE tenant_id = ? AND instance_id = ? AND correlation_id = ? AND chain_position = ?`,
-		ev.TenantID, ev.InstanceID, ev.CorrelationID, ev.ChainPosition-1,
-	).Scan(&prevHash)
+	rows, err := tx.QueryContext(ctx, `
+		SELECT event_id FROM execution_events
+		WHERE tenant_id = ? AND instance_id = ? AND correlation_id = ? AND chain_position = ?
+		ORDER BY event_id ASC`,
+		ev.TenantID, ev.InstanceID, ev.CorrelationID, ev.ChainPosition,
+	)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("%w: previous event missing (chain gap)", ErrChainConflict)
-		}
 		return err
 	}
+	defer rows.Close()
 
-	want := "sha256:" + hex.EncodeToString(prevHash)
-	if normalizePrevEventHash(ev.PrevEventHash) != want {
-		return fmt.Errorf("%w: prev_event_hash mismatch", ErrChainConflict)
+	var occupantIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		occupantIDs = append(occupantIDs, id)
 	}
-	return nil
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	switch len(occupantIDs) {
+	case 0:
+		return nil
+	case 1:
+		if occupantIDs[0] != ev.EventID {
+			return fmt.Errorf("%w: chain position already occupied by another event", ErrChainConflict)
+		}
+		return nil
+	default:
+		return fmt.Errorf("%w: forked chain at current position", ErrChainConflict)
+	}
 }
 
 // StoreEvent persists an ExecutionEvent with its computed SHA-256 hash.

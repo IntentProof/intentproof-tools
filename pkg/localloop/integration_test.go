@@ -95,11 +95,18 @@ func TestIngestWritesFlowsEndToEnd(t *testing.T) {
 }
 
 func mustSignedEvent(t *testing.T, priv ed25519.PrivateKey, tenantID, instanceID, correlationID string, chainPos int, prevHash, action string) ExecutionEvent {
+	return mustSignedEventWithID(t, priv, tenantID, instanceID, correlationID, chainPos, prevHash, action, "")
+}
+
+func mustSignedEventWithID(t *testing.T, priv ed25519.PrivateKey, tenantID, instanceID, correlationID string, chainPos int, prevHash, action, eventID string) ExecutionEvent {
 	t.Helper()
+	if eventID == "" {
+		eventID = fmt.Sprintf("evt_%d_%s", chainPos, correlationID)
+	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	ev := ExecutionEvent{
 		Schema:        "intentproof.event.v1",
-		EventID:       fmt.Sprintf("evt_%d_%s", chainPos, correlationID),
+		EventID:       eventID,
 		TenantID:      tenantID,
 		InstanceID:    instanceID,
 		CorrelationID: correlationID,
