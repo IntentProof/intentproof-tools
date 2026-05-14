@@ -21,8 +21,9 @@ type Result struct {
 	SourceEventID string
 
 	// SourceEmittedAt is the timestamp the upstream source reports
-	// for when the event was produced. It MUST be in UTC. The
-	// gateway preserves this verbatim in the canonical body.
+	// for when the event was produced. Canonicalization normalizes
+	// the value to UTC (preserving the instant but converting the
+	// timezone offset) before placing it in the canonical body.
 	SourceEmittedAt time.Time
 
 	// SubjectType is the logical type of the object the attestation

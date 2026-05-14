@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -14,14 +15,20 @@ const CanonicalSchema = "intentproof.attestation.v1"
 
 // DeriveAttestationID returns the deterministic attestation
 // identifier for an inbound event. It is computed as
-// "att_" + hex(sha256(tenantID|sourceID|sourceEventID))[:24].
+// "att_" + hex(sha256(v1 || json([tenantID, sourceID, sourceEventID])))[:24].
+//
+// The seed is a version byte (0x01) followed by a canonical JSON
+// array of the three strings. JSON array encoding is unambiguous
+// regardless of the contents of the strings (no separator-collision
+// risk) and is stable across implementations.
 //
 // Determinism is load-bearing: replays of the same upstream event
 // MUST resolve to the same attestation id so the gateway can
 // idempotently insert.
 func DeriveAttestationID(tenantID, sourceID, sourceEventID string) string {
-	seed := tenantID + "|" + sourceID + "|" + sourceEventID
-	digest := sha256.Sum256([]byte(seed))
+	arr, _ := json.Marshal([3]string{tenantID, sourceID, sourceEventID})
+	seed := append([]byte{0x01}, arr...)
+	digest := sha256.Sum256(seed)
 	return "att_" + hex.EncodeToString(digest[:12])
 }
 
@@ -73,6 +80,12 @@ func CanonicalBody(
 	sourceSignature map[string]any,
 	payloadHash []byte,
 ) ([]byte, error) {
+	if len(payloadHash) != 0 && len(payloadHash) != sha256.Size {
+		return nil, fmt.Errorf(
+			"payloadHash must be %d bytes (sha-256), got %d",
+			sha256.Size, len(payloadHash),
+		)
+	}
 	typedBody := struct {
 		Schema            string         `json:"schema"`
 		AttestationID     string         `json:"attestation_id"`

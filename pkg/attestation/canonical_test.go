@@ -2,6 +2,8 @@ package attestation
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -45,19 +47,15 @@ func TestDeriveAttestationID_DifferentiatesInputs(t *testing.T) {
 	}
 }
 
-func TestDeriveAttestationID_PipeSeparatorIsLoadBearing(t *testing.T) {
+func TestDeriveAttestationID_PipeSeparatorDoesNotCollide(t *testing.T) {
 	// Tenant "a|stripe" + source "webhook" + event "evt" must not
 	// collide with tenant "a" + source "stripe|webhook" + event
-	// "evt". This documents that the seed format is part of the
-	// contract.
+	// "evt". The JSON-array seed encoding is unambiguous regardless
+	// of the contents of the strings.
 	a := DeriveAttestationID("a|stripe", "webhook", "evt")
 	b := DeriveAttestationID("a", "stripe|webhook", "evt")
-	// They will in fact collide given the current naive separator;
-	// this test pins that current behavior. If the implementation
-	// is hardened (length-prefixed encoding) this test must be
-	// updated together with all consumers.
-	if a != b {
-		t.Fatalf("unexpected separator behavior change: %q vs %q", a, b)
+	if a == b {
+		t.Fatalf("collision for distinct inputs: %q vs %q", a, b)
 	}
 }
 
@@ -92,6 +90,27 @@ func newFixedTime(t *testing.T) time.Time {
 	return ts
 }
 
+func TestCanonicalBody_RejectsBadPayloadHashLength(t *testing.T) {
+	ts := newFixedTime(t)
+	result := Result{
+		SourceEventID:   "evt_1",
+		SourceEmittedAt: ts,
+		SubjectType:     "t",
+		SubjectID:       "i",
+		Claim:           "c",
+		ClaimValue:      json.RawMessage(`{}`),
+	}
+	// 31 bytes is not a valid sha-256 digest.
+	badHash := make([]byte, sha256.Size-1)
+	_, err := CanonicalBody("t", "s", "a", ts, result, nil, nil, badHash)
+	if err == nil {
+		t.Fatal("expected error for bad payloadHash length")
+	}
+	if !strings.Contains(err.Error(), "32 bytes") {
+		t.Fatalf("error should mention expected size, got: %v", err)
+	}
+}
+
 func TestCanonicalBody_Deterministic(t *testing.T) {
 	ts := newFixedTime(t)
 	result := Result{
@@ -103,7 +122,10 @@ func TestCanonicalBody_Deterministic(t *testing.T) {
 		ClaimValue:      json.RawMessage(`{"amount":100,"currency":"usd"}`),
 	}
 	sig := map[string]any{"alg": "hmac-sha256", "key_id": "k1", "value": "v"}
-	hash := []byte{0x01, 0x02, 0x03}
+	hash := make([]byte, sha256.Size)
+	for i := range hash {
+		hash[i] = byte(i + 1)
+	}
 
 	a, err := CanonicalBody("tenant_a", "stripe@webhook", "att_xxx", ts, result, nil, sig, hash)
 	if err != nil {
@@ -130,7 +152,10 @@ func TestCanonicalBody_Shape(t *testing.T) {
 	}
 	corr := "corr_z"
 	sig := map[string]any{"alg": "hmac-sha256", "key_id": "k1", "value": "v"}
-	hash := []byte{0xaa, 0xbb}
+	hash := make([]byte, sha256.Size)
+	for i := range hash {
+		hash[i] = byte(i)
+	}
 
 	raw, err := CanonicalBody("tenant_a", "stripe@webhook", "att_xxx", ts, result, &corr, sig, hash)
 	if err != nil {
@@ -156,8 +181,9 @@ func TestCanonicalBody_Shape(t *testing.T) {
 	if got["claim"] != "refund.created" {
 		t.Fatalf("claim = %v", got["claim"])
 	}
-	if got["source_payload_sha256"] != "sha256:aabb" {
-		t.Fatalf("source_payload_sha256 = %v", got["source_payload_sha256"])
+	wantHash := "sha256:" + hex.EncodeToString(hash)
+	if got["source_payload_sha256"] != wantHash {
+		t.Fatalf("source_payload_sha256 = %v, want %v", got["source_payload_sha256"], wantHash)
 	}
 	// claim_value must be a nested object, not a base64 string.
 	cv, ok := got["claim_value"].(map[string]any)

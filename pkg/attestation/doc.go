@@ -8,7 +8,7 @@
 //
 //   - The [SourceAdapter] interface that an adapter must implement.
 //   - The wire-shape types passed across that interface ([Result],
-//     [SourceSignature]).
+//     [SourceAdapter.SourceSignature]).
 //   - Pure canonicalization helpers that derive the deterministic
 //     bytes signed by the platform: [DeriveAttestationID],
 //     [Subject], and [CanonicalBody].
