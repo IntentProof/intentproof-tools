@@ -85,9 +85,14 @@ func TestCanonicalManifestJSON_Hash(t *testing.T) {
 		EventMerkle: "sha256:def",
 		AttMerkle:   "sha256:ghi",
 	}
-	raw, _ := json.Marshal(m2)
+	raw, err := json.Marshal(m2)
+	if err != nil {
+		t.Fatalf("json.Marshal manifest: %v", err)
+	}
 	var tmp map[string]interface{}
-	json.Unmarshal(raw, &tmp)
+	if err := json.Unmarshal(raw, &tmp); err != nil {
+		t.Fatalf("json.Unmarshal manifest: %v", err)
+	}
 	delete(tmp, "signature")
 	canonBytes, err := canon.Marshal(tmp)
 	if err != nil {
