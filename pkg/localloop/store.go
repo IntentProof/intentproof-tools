@@ -153,14 +153,23 @@ func FlowBoundsAndMode(ctx context.Context, db *sql.DB, tenantID, correlationID 
 	var startedAt, closedAt time.Time
 	modes := make([]string, 0)
 	for rows.Next() {
-		var s, c string
-		var m string
+		var s, c, m string
 		if err := rows.Scan(&s, &c, &m); err != nil {
 			return time.Time{}, time.Time{}, "", fmt.Errorf("scan bounds: %w", err)
 		}
-		if len(modes) == 0 {
-			startedAt, _ = time.Parse(time.RFC3339Nano, s)
-			closedAt, _ = time.Parse(time.RFC3339Nano, c)
+		st, err := time.Parse(time.RFC3339Nano, s)
+		if err != nil {
+			return time.Time{}, time.Time{}, "", fmt.Errorf("parse started_at %q: %w", s, err)
+		}
+		ct, err := time.Parse(time.RFC3339Nano, c)
+		if err != nil {
+			return time.Time{}, time.Time{}, "", fmt.Errorf("parse completed_at %q: %w", c, err)
+		}
+		if len(modes) == 0 || st.Before(startedAt) {
+			startedAt = st
+		}
+		if len(modes) == 0 || ct.After(closedAt) {
+			closedAt = ct
 		}
 		if m == "" {
 			m = "operational"

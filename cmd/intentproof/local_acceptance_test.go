@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -29,11 +31,19 @@ func TestLocalAcceptance(t *testing.T) {
 		t.Fatalf("build CLI: %v", err)
 	}
 
+	// Allocate a free port so the test doesn't flake when 9786 is taken.
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("allocate free port: %v", err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, bin, "local")
-	cmd.Env = append(os.Environ(), homeEnv)
+	cmd.Env = append(os.Environ(), homeEnv, fmt.Sprintf("INTENTPROOF_LOCAL_INGEST_ADDR=:%d", port))
 	var stderrBuf bytes.Buffer
 	cmd.Stdout = io.Discard
 	cmd.Stderr = &stderrBuf
@@ -50,9 +60,10 @@ func TestLocalAcceptance(t *testing.T) {
 	}()
 
 	// Wait for the ingest HTTP endpoint to come up (max 10s).
+	ingestURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 	for i := 0; i < 100; i++ {
 		time.Sleep(100 * time.Millisecond)
-		resp, err := http.Get("http://localhost:9786")
+		resp, err := http.Get(ingestURL)
 		if err == nil {
 			_ = resp.Body.Close()
 			break
@@ -83,7 +94,7 @@ func TestLocalAcceptance(t *testing.T) {
 	}
 	body, _ := json.Marshal(event)
 
-	resp, err := http.Post("http://localhost:9786", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(ingestURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("post event: %v", err)
 	}

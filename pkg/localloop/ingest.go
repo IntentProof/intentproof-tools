@@ -81,7 +81,7 @@ func validateEvent(ev ExecutionEvent) error {
 	if ev.Schema != "intentproof.event.v1" {
 		return fmt.Errorf("invalid schema")
 	}
-	if ev.EventID == "" || ev.TenantID == "" || ev.InstanceID == "" {
+	if ev.EventID == "" || ev.TenantID == "" || ev.InstanceID == "" || ev.CorrelationID == "" {
 		return fmt.Errorf("missing identity fields")
 	}
 	if ev.ChainPosition < 1 {

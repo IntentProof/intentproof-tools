@@ -30,6 +30,7 @@ func StartEmbeddedNATS() (*NATSWrapper, error) {
 	}
 	ns.Start()
 	if !ns.ReadyForConnections(5 * time.Second) {
+		ns.Shutdown()
 		return nil, fmt.Errorf("nats server did not start in time")
 	}
 
@@ -50,8 +51,23 @@ func (n *NATSWrapper) URL() string {
 	return n.Server.ClientURL()
 }
 
+func validateTenantID(tenant string) error {
+	if tenant == "" {
+		return fmt.Errorf("tenant_id is empty")
+	}
+	for _, r := range tenant {
+		if r == '.' || r == '*' || r == '>' {
+			return fmt.Errorf("tenant_id contains illegal NATS character %q", r)
+		}
+	}
+	return nil
+}
+
 // PublishEventCommitted publishes a committed event envelope.
 func (n *NATSWrapper) PublishEventCommitted(env CommitEnvelope) error {
+	if err := validateTenantID(env.TenantID); err != nil {
+		return fmt.Errorf("publish event committed: %w", err)
+	}
 	data, err := json.Marshal(env)
 	if err != nil {
 		return err
@@ -66,6 +82,9 @@ func (n *NATSWrapper) SubscribeEventCommitted(handler nats.MsgHandler) (*nats.Su
 
 // PublishFlowMaterialized publishes a materialized flow.
 func (n *NATSWrapper) PublishFlowMaterialized(tenantID string, data []byte) error {
+	if err := validateTenantID(tenantID); err != nil {
+		return fmt.Errorf("publish flow materialized: %w", err)
+	}
 	return n.Client.Publish("flows.materialized."+tenantID, data)
 }
 

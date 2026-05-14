@@ -14,7 +14,9 @@ import (
 
 func startLocalServer() error {
 	dataDir := filepath.Join(os.Getenv("HOME"), ".intentproof", "local")
-	_ = os.MkdirAll(dataDir, 0o755)
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return fmt.Errorf("create data dir: %w", err)
+	}
 
 	dbPath := filepath.Join(dataDir, "local.db")
 	db, err := localloop.OpenDB(dbPath)
@@ -33,9 +35,14 @@ func startLocalServer() error {
 	if v := os.Getenv("INTENTPROOF_LOCAL_INGEST_ADDR"); v != "" {
 		ingestAddr = v
 	}
-	ingestURL := "http://localhost" + ingestAddr
-	if ingestAddr[0] == ':' {
+	var ingestURL string
+	switch {
+	case len(ingestAddr) > 0 && ingestAddr[0] == ':':
 		ingestURL = "http://localhost" + ingestAddr
+	case len(ingestAddr) > 7 && (ingestAddr[:7] == "http://" || ingestAddr[:8] == "https://"):
+		ingestURL = ingestAddr
+	default:
+		ingestURL = "http://" + ingestAddr
 	}
 
 	ingestSrv := localloop.NewIngestServer(ingestAddr, db, nats)
@@ -56,21 +63,28 @@ func startLocalServer() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	errCh := make(chan error, 2)
+
 	// Start ingest HTTP server in background.
 	go func() {
 		if err := ingestSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Fprintf(os.Stderr, "ingest server error: %v\n", err)
+			errCh <- fmt.Errorf("ingest server: %w", err)
 		}
 	}()
 
 	// Start flow builder in background.
 	go func() {
 		if err := flowBuilder.Run(ctx); err != nil && err != context.Canceled {
-			fmt.Fprintf(os.Stderr, "flow builder error: %v\n", err)
+			errCh <- fmt.Errorf("flow builder: %w", err)
 		}
 	}()
 
-	<-ctx.Done()
-	fmt.Println("\nShutting down...")
-	return nil
+	select {
+	case <-ctx.Done():
+		fmt.Println("\nShutting down...")
+		return nil
+	case err := <-errCh:
+		fmt.Println("\nShutting down after error...")
+		return err
+	}
 }
