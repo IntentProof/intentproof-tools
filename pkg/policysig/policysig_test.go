@@ -3,10 +3,44 @@ package policysig
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"github.com/intentproof/intentproof-tools/pkg/crypto"
 )
+
+func TestCanonicalizePolicy_Hash(t *testing.T) {
+	policy := map[string]any{
+		"schema":         "intentproof.policy.v1",
+		"policy_id":      "tnt.test",
+		"policy_version": 1,
+		"tenant_id":      "tnt",
+		"spec_version":   "1.0.0",
+		"scope":          map[string]any{"any_event_action_in": []string{"a"}},
+		"rules": []any{
+			map[string]any{
+				"id":       "r1",
+				"category": "required",
+				"severity": "high",
+				"spec":     map[string]any{"action": "a"},
+			},
+		},
+	}
+	canonical, err := canonicalizePolicy(policy)
+	if err != nil {
+		t.Fatalf("canonicalizePolicy: %v", err)
+	}
+	wantHash := "7ffa54b2f15b9ab936a94eb3926a79bde8f66b0a81d0fee69b6c9d2c6a2fb07b"
+	gotHash := hex.EncodeToString(sha256Hash(canonical))
+	if gotHash != wantHash {
+		t.Fatalf("canonical hash mismatch: want %s, got %s", wantHash, gotHash)
+	}
+}
+
+func sha256Hash(b []byte) []byte {
+	d := sha256.Sum256(b)
+	return d[:]
+}
 
 func TestComputeFingerprint_Deterministic(t *testing.T) {
 	policy := map[string]any{

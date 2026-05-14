@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/intentproof/intentproof-tools/pkg/canon"
 	"github.com/intentproof/intentproof-tools/pkg/crypto"
 )
 
@@ -31,7 +32,7 @@ func canonicalizePolicy(policy any) ([]byte, error) {
 	delete(m, "signature")
 	delete(m, "signed_at")
 
-	canonical, err := json.Marshal(m)
+	canonical, err := canon.Marshal(m)
 	if err != nil {
 		return nil, fmt.Errorf("marshal canonical: %w", err)
 	}

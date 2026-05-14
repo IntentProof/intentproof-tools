@@ -11,6 +11,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/intentproof/intentproof-tools/pkg/canon"
 )
 
 func TestBundleRoundTrip(t *testing.T) {
@@ -48,6 +50,56 @@ func TestBundleRoundTrip(t *testing.T) {
 		if !hasFinding(res.Findings, wf) {
 			t.Fatalf("expected finding %q, got %v", wf, res.Findings)
 		}
+	}
+}
+
+func TestCanonicalManifestJSON_Hash(t *testing.T) {
+	m := &Manifest{
+		Schema:    "intentproof.bundle.manifest.v1",
+		BundleID:  "bundle_f1",
+		CreatedAt: "2026-05-12T00:00:00Z",
+		FlowID:    "f1",
+		TenantID:  "tnt",
+		Files:     []ManifestEntry{{Path: "flow.json", SHA: "sha256:abc"}},
+		EventMerkle: "sha256:def",
+		AttMerkle:   "sha256:ghi",
+	}
+	canonical, err := canonicalManifestJSON(m)
+	if err != nil {
+		t.Fatalf("canonicalManifestJSON: %v", err)
+	}
+	wantHash := "d23ef437013795a52f1f27347f5c2c2eaf08f9e681279e302ca5168049f7ef2a"
+	gotHash := hex.EncodeToString(sha256Sum(canonical))
+	if gotHash != wantHash {
+		t.Fatalf("manifest canonical hash mismatch: want %s, got %s", wantHash, gotHash)
+	}
+
+	// Verify canon.Marshal produces identical bytes for the same input.
+	m2 := &Manifest{
+		Schema:    "intentproof.bundle.manifest.v1",
+		BundleID:  "bundle_f1",
+		CreatedAt: "2026-05-12T00:00:00Z",
+		FlowID:    "f1",
+		TenantID:  "tnt",
+		Files:     []ManifestEntry{{Path: "flow.json", SHA: "sha256:abc"}},
+		EventMerkle: "sha256:def",
+		AttMerkle:   "sha256:ghi",
+	}
+	raw, err := json.Marshal(m2)
+	if err != nil {
+		t.Fatalf("json.Marshal manifest: %v", err)
+	}
+	var tmp map[string]interface{}
+	if err := json.Unmarshal(raw, &tmp); err != nil {
+		t.Fatalf("json.Unmarshal manifest: %v", err)
+	}
+	delete(tmp, "signature")
+	canonBytes, err := canon.Marshal(tmp)
+	if err != nil {
+		t.Fatalf("canon.Marshal: %v", err)
+	}
+	if !bytes.Equal(canonical, canonBytes) {
+		t.Fatalf("canonicalManifestJSON drift from canon.Marshal")
 	}
 }
 

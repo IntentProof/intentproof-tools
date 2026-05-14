@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/intentproof/intentproof-tools/pkg/canon"
 	"github.com/intentproof/intentproof-tools/pkg/merkle"
 )
 
@@ -888,7 +889,7 @@ func CanonicalRunJSON(run *VerificationRun) ([]byte, error) {
 	delete(m, "signature")
 	delete(m, "started_at")
 	delete(m, "completed_at")
-	return canonicalJSON(m)
+	return canon.Marshal(m)
 }
 
 func parseISODuration(s string) (time.Duration, error) {
@@ -946,40 +947,9 @@ func parseDurationValue(s string) (float64, error) {
 }
 
 func canonicalClaimValueKey(v interface{}) string {
-	normalized := normalizeForJSON(v)
-	raw, err := json.Marshal(normalized)
+	raw, err := canon.Marshal(v)
 	if err != nil {
 		return fmt.Sprintf("%T|%v", v, v)
 	}
 	return string(raw)
-}
-
-// canonicalJSON produces deterministic JSON with sorted map keys.
-func canonicalJSON(v interface{}) ([]byte, error) {
-	normalized := normalizeForJSON(v)
-	return json.Marshal(normalized)
-}
-
-func normalizeForJSON(v interface{}) interface{} {
-	switch x := v.(type) {
-	case map[string]interface{}:
-		keys := make([]string, 0, len(x))
-		for k := range x {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		out := make(map[string]interface{}, len(x))
-		for _, k := range keys {
-			out[k] = normalizeForJSON(x[k])
-		}
-		return out
-	case []interface{}:
-		out := make([]interface{}, len(x))
-		for i, v := range x {
-			out[i] = normalizeForJSON(v)
-		}
-		return out
-	default:
-		return x
-	}
 }

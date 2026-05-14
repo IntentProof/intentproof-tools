@@ -1,11 +1,48 @@
 package verifier
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestCanonicalRunJSON_Hash(t *testing.T) {
+	origNow := nowFunc
+	fixed := time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)
+	nowFunc = func() time.Time { return fixed }
+	defer func() { nowFunc = origNow }()
+
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[{"event_id":"e1","action":"pay","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1}}]}`)
+
+	run, err := Verify(flow, policy, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+
+	canonical, err := CanonicalRunJSON(run)
+	if err != nil {
+		t.Fatalf("CanonicalRunJSON: %v", err)
+	}
+	wantHash := "0be1803e237ccc37d85b1c8bb4206ad7019319cd90ece3a0a5bac872625ba1ab"
+	gotHash := hex.EncodeToString(sha256Sum(canonical))
+	if gotHash != wantHash {
+		t.Fatalf("canonical run hash mismatch: want %s, got %s", wantHash, gotHash)
+	}
+
+	wantFP := "sha256:" + wantHash
+	if run.RunFingerprint != wantFP {
+		t.Fatalf("run fingerprint mismatch: want %s, got %s", wantFP, run.RunFingerprint)
+	}
+}
+
+func sha256Sum(data []byte) []byte {
+	d := sha256.Sum256(data)
+	return d[:]
+}
 
 func TestVerifyEmptyFlowNoRules(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
