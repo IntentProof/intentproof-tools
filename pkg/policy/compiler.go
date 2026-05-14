@@ -84,8 +84,12 @@ type yamlRule struct {
 	Claim              string            `yaml:"claim"`
 	ExpectedValue      any               `yaml:"expected_value"`
 	RequireSigned      *bool             `yaml:"require_signed_sources"`
+	RequireSignedAlias *bool             `yaml:"require_signed"`
 	Sources            []map[string]any  `yaml:"sources"`
 	Threshold          map[string]any    `yaml:"threshold"`
+	Operator           string            `yaml:"operator"`
+	Value              any               `yaml:"value"`
+	SourceID           string            `yaml:"source_id"`
 }
 
 func CompileFile(path string) (*CompileResult, error) {
@@ -192,6 +196,9 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 	if severity == "" {
 		severity = "medium"
 	}
+	if err := validateSeverity(severity); err != nil {
+		return CanonicalRule{}, err
+	}
 
 	spec := map[string]any{}
 	switch category {
@@ -217,24 +224,36 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 		if err := validateMinMax(min, max); err != nil {
 			return CanonicalRule{}, err
 		}
-		if len(rule.Where) > 0 {
-			spec["where"] = rule.Where
+		if where := normalizeStringMap(rule.Where); where != nil {
+			spec["where"] = where
 		}
 	case "forbidden":
 		if rule.Action == "" {
 			return CanonicalRule{}, errors.New("forbidden rule needs action")
 		}
+		hasWherePred := rule.WherePredecessor != nil
+		hasWithoutPred := rule.WithoutPredecessor != ""
+		if hasWherePred && hasWithoutPred {
+			return CanonicalRule{}, errors.New(
+				"forbidden rule cannot set both where_predecessor and without_predecessor",
+			)
+		}
+		if (hasWherePred || hasWithoutPred) && rule.After == "" {
+			return CanonicalRule{}, errors.New(
+				"forbidden rule with where_predecessor or without_predecessor requires after",
+			)
+		}
 		spec["action"] = rule.Action
 		if rule.After != "" {
 			spec["after"] = rule.After
 		}
-		if len(rule.Where) > 0 {
-			spec["where"] = rule.Where
+		if where := normalizeStringMap(rule.Where); where != nil {
+			spec["where"] = where
 		}
-		if len(rule.WherePredecessor) > 0 {
-			spec["where_predecessor"] = rule.WherePredecessor
+		if wp := normalizeStringMap(rule.WherePredecessor); wp != nil {
+			spec["where_predecessor"] = wp
 		}
-		if rule.WithoutPredecessor != "" {
+		if hasWithoutPred {
 			spec["without_predecessor"] = rule.WithoutPredecessor
 		}
 	case "ordering":
@@ -278,15 +297,15 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 		if rule.CountBasis != "" {
 			spec["count_basis"] = rule.CountBasis
 		}
-		if len(rule.Where) > 0 {
-			spec["where"] = rule.Where
+		if where := normalizeStringMap(rule.Where); where != nil {
+			spec["where"] = where
 		}
 	case "temporal":
 		if len(rule.From) == 0 || len(rule.To) == 0 {
 			return CanonicalRule{}, errors.New("temporal rule needs from and to")
 		}
-		spec["from"] = rule.From
-		spec["to"] = rule.To
+		spec["from"] = normalizeStringMap(rule.From)
+		spec["to"] = normalizeStringMap(rule.To)
 		if rule.Min != nil {
 			if v, ok := rule.Min.(string); ok && v != "" {
 				spec["min"] = v
@@ -318,9 +337,9 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 		}
 		sources := make([]map[string]any, 0, len(rule.Sources))
 		for _, source := range rule.Sources {
-			normalized := map[string]any{}
-			for k, v := range source {
-				normalized[k] = v
+			normalized := normalizeStringMap(source)
+			if normalized == nil {
+				normalized = map[string]any{}
 			}
 			if kind, ok := normalized["kind"].(string); ok {
 				if kind == "internal" {
@@ -331,12 +350,60 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 		}
 		spec["claim"] = rule.Claim
 		spec["sources"] = sources
-		spec["threshold"] = rule.Threshold
+		spec["threshold"] = normalizeStringMap(rule.Threshold)
 		if rule.ExpectedValue != nil {
-			spec["expected_value"] = rule.ExpectedValue
+			spec["expected_value"] = normalizeMap(rule.ExpectedValue)
 		}
 		if rule.RequireSigned != nil {
 			spec["require_signed_sources"] = *rule.RequireSigned
+		}
+	case "value_bound":
+		if rule.Claim == "" {
+			return CanonicalRule{}, errors.New("value_bound rule needs claim")
+		}
+		operator := strings.TrimSpace(rule.Operator)
+		if operator == "" {
+			return CanonicalRule{}, errors.New("value_bound rule needs operator")
+		}
+		if !isValueBoundOperator(operator) {
+			return CanonicalRule{}, fmt.Errorf(
+				"value_bound rule has unsupported operator %q: must be one of lt, lte, gt, gte, eq, ne",
+				operator,
+			)
+		}
+		boundValue, ok := numericFromAny(rule.Value)
+		if !ok {
+			return CanonicalRule{}, errors.New("value_bound rule needs numeric value")
+		}
+		spec["claim"] = rule.Claim
+		spec["operator"] = operator
+		spec["value"] = boundValue
+		if rule.SourceID != "" {
+			spec["source_id"] = rule.SourceID
+		}
+	case "claim_match":
+		if rule.Claim == "" {
+			return CanonicalRule{}, errors.New("claim_match rule needs claim")
+		}
+		if rule.ExpectedValue == nil {
+			return CanonicalRule{}, errors.New("claim_match rule needs expected_value")
+		}
+		spec["claim"] = rule.Claim
+		spec["expected_value"] = normalizeMap(rule.ExpectedValue)
+		if rule.SourceID != "" {
+			spec["source_id"] = rule.SourceID
+		}
+		if rule.RequireSignedAlias != nil && rule.RequireSigned != nil &&
+			*rule.RequireSignedAlias != *rule.RequireSigned {
+			return CanonicalRule{}, errors.New(
+				"claim_match rule sets conflicting values for " +
+					"require_signed and require_signed_sources",
+			)
+		}
+		if rule.RequireSignedAlias != nil {
+			spec["require_signed"] = *rule.RequireSignedAlias
+		} else if rule.RequireSigned != nil {
+			spec["require_signed"] = *rule.RequireSigned
 		}
 	default:
 		return CanonicalRule{}, fmt.Errorf("unknown rule category: %s", category)
@@ -417,6 +484,33 @@ func dedupeStrings(values []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// isValueBoundOperator reports whether op is one of the supported
+// comparison operators for a value_bound rule.  The list mirrors the
+// enum in spec/schema/policy.v1.schema.json.
+func isValueBoundOperator(op string) bool {
+	switch op {
+	case "lt", "lte", "gt", "gte", "eq", "ne":
+		return true
+	}
+	return false
+}
+
+// numericFromAny coerces a YAML-decoded scalar into a float64. It accepts
+// int, int64, and float64 inputs; any other type (including strings) yields
+// (0, false).
+func numericFromAny(v any) (float64, bool) {
+	switch x := v.(type) {
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case float64:
+		return x, true
+	default:
+		return 0, false
+	}
 }
 
 func intFromAny(v any, field string) (*int, error) {
