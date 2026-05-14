@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/intentproof/intentproof-tools/pkg/canon"
 )
 
 // SignatureEnvelope is the canonical JSON representation of a policy signature.
@@ -54,7 +56,7 @@ func BuildPolicySignPayload(canonicalPolicy any) ([]byte, error) {
 	delete(m, "policy_fingerprint")
 	delete(m, "signature")
 	delete(m, "signed_at")
-	canonical, err := json.Marshal(m)
+	canonical, err := canon.Marshal(m)
 	if err != nil {
 		return nil, fmt.Errorf("marshal canonical: %w", err)
 	}

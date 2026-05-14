@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/intentproof/intentproof-tools/pkg/canon"
 )
 
 // Manifest is the canonical bundle manifest. It is signed by the platform
@@ -356,7 +358,7 @@ func canonicalManifestJSON(m *Manifest) ([]byte, error) {
 		return nil, err
 	}
 	delete(tmp, "signature")
-	return json.Marshal(tmp)
+	return canon.Marshal(tmp)
 }
 
 // computeItemMerkle builds a Merkle root from a list of JSON items using the
