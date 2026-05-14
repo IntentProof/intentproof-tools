@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sort"
 	"strconv"
@@ -43,9 +44,11 @@ func MarshalRaw(raw json.RawMessage) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("canon: decode input: %w", err)
 	}
-	// Reject trailing tokens.
+	// Reject trailing tokens and malformed suffixes.
 	if _, err := dec.Token(); err == nil {
 		return nil, errors.New("canon: unexpected trailing JSON token")
+	} else if err != io.EOF {
+		return nil, fmt.Errorf("canon: malformed trailing data: %w", err)
 	}
 	var buf bytes.Buffer
 	if err := encodeValue(&buf, value); err != nil {
@@ -86,7 +89,9 @@ func decodeValue(dec *json.Decoder) (any, error) {
 				if err != nil {
 					return nil, err
 				}
-				obj.set(key, val)
+				if err := obj.set(key, val); err != nil {
+					return nil, err
+				}
 			}
 			// consume closing '}'
 			if _, err := dec.Token(); err != nil {
@@ -137,11 +142,13 @@ func newOrderedObject() *orderedObject {
 	return &orderedObject{values: map[string]any{}}
 }
 
-func (o *orderedObject) set(k string, v any) {
-	if _, exists := o.values[k]; !exists {
-		o.keys = append(o.keys, k)
+func (o *orderedObject) set(k string, v any) error {
+	if _, exists := o.values[k]; exists {
+		return fmt.Errorf("canon: duplicate object key: %s", k)
 	}
+	o.keys = append(o.keys, k)
 	o.values[k] = v
+	return nil
 }
 
 // encodeValue writes the canonical form of value to buf.

@@ -274,6 +274,20 @@ func TestRejectsTrailingTokens(t *testing.T) {
 	}
 }
 
+func TestRejectsTrailingNonEOF(t *testing.T) {
+	// Malformed suffix after a valid JSON value must produce an error
+	// (the decoder sees an invalid character, not just an extra token).
+	if _, err := MarshalRaw(json.RawMessage(`{}x`)); err == nil {
+		t.Fatalf("expected error for trailing non-EOF bytes")
+	}
+}
+
+func TestRejectsDuplicateKeys(t *testing.T) {
+	if _, err := MarshalRaw(json.RawMessage(`{"a":1,"a":2}`)); err == nil {
+		t.Fatalf("expected error for duplicate object keys")
+	}
+}
+
 func TestRejectsMalformedJSON(t *testing.T) {
 	if _, err := MarshalRaw(json.RawMessage(`{`)); err == nil {
 		t.Fatalf("expected error for malformed JSON")
