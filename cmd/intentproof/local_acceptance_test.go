@@ -61,13 +61,23 @@ func TestLocalAcceptance(t *testing.T) {
 
 	// Wait for the ingest HTTP endpoint to come up (max 10s).
 	ingestURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	client := &http.Client{Timeout: 2 * time.Second}
+	ready := false
 	for i := 0; i < 100; i++ {
 		time.Sleep(100 * time.Millisecond)
-		resp, err := http.Get(ingestURL)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, ingestURL, nil)
+		if err != nil {
+			t.Fatalf("build readiness request: %v", err)
+		}
+		resp, err := client.Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
+			ready = true
 			break
 		}
+	}
+	if !ready {
+		t.Fatalf("ingest endpoint did not become ready within 10s")
 	}
 
 	event := localloop.ExecutionEvent{
@@ -92,9 +102,17 @@ func TestLocalAcceptance(t *testing.T) {
 			Value: "dummysig",
 		},
 	}
-	body, _ := json.Marshal(event)
+	body, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
 
-	resp, err := http.Post(ingestURL, "application/json", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ingestURL, bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("build post request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("post event: %v", err)
 	}
