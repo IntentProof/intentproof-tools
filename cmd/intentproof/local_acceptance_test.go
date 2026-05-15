@@ -20,6 +20,19 @@ import (
 	"github.com/intentproof/intentproof-tools/pkg/localloop"
 )
 
+func httpOK(ctx context.Context, client *http.Client, url string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
 // TestLocalAcceptance builds the CLI, starts `intentproof local`, posts an
 // event, and verifies the flow is materialized within 5 seconds.
 func TestLocalAcceptance(t *testing.T) {
@@ -34,13 +47,27 @@ func TestLocalAcceptance(t *testing.T) {
 		t.Fatalf("build CLI: %v", err)
 	}
 
-	// Allocate a free port so the test doesn't flake when 9786 is taken.
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	// Allocate free ports so parallel test runs do not collide on defaults.
+	l1, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("allocate free port: %v", err)
 	}
-	port := l.Addr().(*net.TCPAddr).Port
-	l.Close()
+	port1 := l1.Addr().(*net.TCPAddr).Port
+	l1.Close()
+
+	l2, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("allocate verifier port: %v", err)
+	}
+	port2 := l2.Addr().(*net.TCPAddr).Port
+	l2.Close()
+
+	l3, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("allocate dashboard port: %v", err)
+	}
+	port3 := l3.Addr().(*net.TCPAddr).Port
+	l3.Close()
 
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -67,7 +94,11 @@ func TestLocalAcceptance(t *testing.T) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, bin, "local")
-	cmd.Env = append(os.Environ(), homeEnv, fmt.Sprintf("INTENTPROOF_LOCAL_INGEST_ADDR=:%d", port))
+	cmd.Env = append(os.Environ(), homeEnv,
+		fmt.Sprintf("INTENTPROOF_LOCAL_INGEST_ADDR=:%d", port1),
+		fmt.Sprintf("INTENTPROOF_LOCAL_VERIFIER_ADDR=:%d", port2),
+		fmt.Sprintf("INTENTPROOF_LOCAL_DASHBOARD_ADDR=:%d", port3),
+	)
 	var stderrBuf bytes.Buffer
 	cmd.Stdout = io.Discard
 	cmd.Stderr = &stderrBuf
@@ -83,27 +114,28 @@ func TestLocalAcceptance(t *testing.T) {
 		}
 	}()
 
-	// Wait for the ingest HTTP endpoint to come up (max 10s).
-	ingestBase := fmt.Sprintf("http://127.0.0.1:%d", port)
+	// Wait for ingest, verifier, and dashboard HTTP endpoints (max 10s).
+	ingestBase := fmt.Sprintf("http://127.0.0.1:%d", port1)
+	verifierBase := fmt.Sprintf("http://127.0.0.1:%d", port2)
+	dashboardBase := fmt.Sprintf("http://127.0.0.1:%d", port3)
 	client := &http.Client{Timeout: 2 * time.Second}
 	ready := false
 	for i := 0; i < 100; i++ {
 		time.Sleep(100 * time.Millisecond)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, ingestBase+"/healthz", nil)
-		if err != nil {
-			t.Fatalf("build readiness request: %v", err)
+		if !httpOK(ctx, client, ingestBase+"/healthz") {
+			continue
 		}
-		resp, err := client.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				ready = true
-				break
-			}
+		if !httpOK(ctx, client, verifierBase+"/healthz") {
+			continue
 		}
+		if !httpOK(ctx, client, dashboardBase+"/healthz") {
+			continue
+		}
+		ready = true
+		break
 	}
 	if !ready {
-		t.Fatalf("ingest endpoint did not become ready within 10s")
+		t.Fatalf("local HTTP endpoints did not become ready within 10s")
 	}
 
 	now := time.Now().UTC().Truncate(time.Millisecond)
@@ -163,6 +195,23 @@ func TestLocalAcceptance(t *testing.T) {
 		flow, err := localloop.GetFlowByCorrelationID(context.Background(), db, "tnt_local", "corr_acceptance_1")
 		_ = db.Close()
 		if err == nil && flow != nil {
+			// Dashboard should list the materialized correlation.
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, dashboardBase+"/", nil)
+			if err != nil {
+				t.Fatalf("dashboard request: %v", err)
+			}
+			dresp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("dashboard get: %v", err)
+			}
+			dhtml, _ := io.ReadAll(dresp.Body)
+			_ = dresp.Body.Close()
+			if dresp.StatusCode != http.StatusOK {
+				t.Fatalf("dashboard status %d", dresp.StatusCode)
+			}
+			if !bytes.Contains(dhtml, []byte("corr_acceptance_1")) {
+				t.Fatalf("dashboard missing correlation: %s", string(dhtml))
+			}
 			return
 		}
 	}

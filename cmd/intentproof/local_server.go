@@ -43,15 +43,18 @@ func startLocalServer() error {
 	if v := os.Getenv("INTENTPROOF_LOCAL_INGEST_ADDR"); v != "" {
 		ingestAddr = v
 	}
-	var ingestURL string
-	switch {
-	case len(ingestAddr) > 0 && ingestAddr[0] == ':':
-		ingestURL = "http://localhost" + ingestAddr
-	case len(ingestAddr) > 7 && (ingestAddr[:7] == "http://" || ingestAddr[:8] == "https://"):
-		ingestURL = ingestAddr
-	default:
-		ingestURL = "http://" + ingestAddr
+	verifierAddr := ":9788"
+	if v := os.Getenv("INTENTPROOF_LOCAL_VERIFIER_ADDR"); v != "" {
+		verifierAddr = v
 	}
+	dashboardAddr := ":9789"
+	if v := os.Getenv("INTENTPROOF_LOCAL_DASHBOARD_ADDR"); v != "" {
+		dashboardAddr = v
+	}
+
+	ingestURL := localloop.LocalPublicBaseURL(ingestAddr)
+	verifierURL := localloop.LocalPublicBaseURL(verifierAddr)
+	dashboardURL := localloop.LocalPublicBaseURL(dashboardAddr)
 
 	ingestSrv := localloop.NewIngestServer(ingestAddr, db, nats)
 	flowBuilder := localloop.NewFlowBuilder(db, nats)
@@ -60,23 +63,39 @@ func startLocalServer() error {
 	fmt.Println("migrating SQLite")
 	fmt.Println("generating local tenant: tnt_local")
 	fmt.Println("starting ingest    on", ingestAddr)
+	fmt.Println("starting verifier  on", verifierAddr)
+	fmt.Println("starting dashboard on", dashboardAddr)
 	fmt.Println("starting flow builder")
 	fmt.Println("NATS URL:", nats.URL())
 	fmt.Println()
 	fmt.Println("Ingest endpoint:", ingestURL+"/v1/events")
+	fmt.Println("Verifier API:   ", verifierURL+"/v1/verify/run")
+	fmt.Println("Dashboard:      ", dashboardURL+"/")
 	fmt.Println("NATS endpoint:  ", nats.URL())
 	fmt.Println("\nWhen you run code with INTENTPROOF_INGEST_URL=" + ingestURL + "/v1/events,")
-	fmt.Println("events flow in real-time. Ctrl-C to stop.")
+	fmt.Println("open", dashboardURL, "to inspect flows. Ctrl-C to stop.")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 4)
 
 	// Start ingest HTTP server in background.
 	go func() {
 		if err := ingestSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- fmt.Errorf("ingest server: %w", err)
+		}
+	}()
+
+	go func() {
+		if err := http.ListenAndServe(verifierAddr, localloop.LocalVerifierHandler()); err != nil {
+			errCh <- fmt.Errorf("verifier server: %w", err)
+		}
+	}()
+
+	go func() {
+		if err := http.ListenAndServe(dashboardAddr, localloop.LocalDashboardHandler(db)); err != nil {
+			errCh <- fmt.Errorf("dashboard server: %w", err)
 		}
 	}()
 

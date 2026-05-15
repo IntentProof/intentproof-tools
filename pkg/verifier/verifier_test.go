@@ -30,7 +30,7 @@ func TestCanonicalRunJSON_Hash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CanonicalRunJSON: %v", err)
 	}
-	wantHash := "fb17414650d0db5a477dce5b20ded8ebc6017f6838739cae434ca27858eefdb5"
+	wantHash := "264f47770c6fd5b4040db75239d1abe6dbfed2e470cbe264d647b9b4d9ea1793"
 	gotHash := hex.EncodeToString(sha256Sum(canonical))
 	if gotHash != wantHash {
 		t.Fatalf("canonical run hash mismatch: want %s, got %s", wantHash, gotHash)
@@ -265,8 +265,8 @@ func TestVerifyConsensusDisagreement(t *testing.T) {
 		t.Fatalf("expected fail, got %s", run.Status)
 	}
 	reason := run.Findings[0]["reason"].(string)
-	if !strings.Contains(reason, "consensus.disagreement") {
-		t.Fatalf("expected consensus.disagreement reason, got %s", reason)
+	if reason != "fail.consensus.disagreement" {
+		t.Fatalf("expected fail.consensus.disagreement reason, got %s", reason)
 	}
 }
 
@@ -496,8 +496,12 @@ func TestVerifyValueBoundNonNumericClaimValue(t *testing.T) {
 		t.Fatalf("expected fail, got %s", run.Status)
 	}
 	reason := run.Findings[0]["reason"].(string)
-	if !strings.Contains(reason, "1/1 attestations violate") {
-		t.Fatalf("expected violation reason, got %s", reason)
+	if reason != "fail.value_bound.out_of_range" {
+		t.Fatalf("expected fail.value_bound.out_of_range, got %s", reason)
+	}
+	summary := run.Findings[0]["human_summary"].(string)
+	if !strings.Contains(summary, "1/1 attestations violate") {
+		t.Fatalf("expected violation detail in human_summary, got %s", summary)
 	}
 }
 
@@ -516,7 +520,7 @@ func TestVerifyValueBoundWithSourceIDFilter(t *testing.T) {
 		t.Fatalf("expected pass, got %s", run.Status)
 	}
 	// Only a1 should be in evidence because source_id filters to model-a.
-	ev := run.Findings[0]["evidence_event_ids"].([]string)
+	ev := run.Findings[0]["evidence_attestation_ids"].([]string)
 	if len(ev) != 1 || ev[0] != "a1" {
 		t.Fatalf("expected evidence [a1], got %v", ev)
 	}
@@ -587,7 +591,7 @@ func TestVerifyClaimMatchWithSourceIDFilter(t *testing.T) {
 	if run.Status != "pass" {
 		t.Fatalf("expected pass, got %s", run.Status)
 	}
-	ev := run.Findings[0]["evidence_event_ids"].([]string)
+	ev := run.Findings[0]["evidence_attestation_ids"].([]string)
 	if len(ev) != 1 || ev[0] != "a1" {
 		t.Fatalf("expected evidence [a1], got %v", ev)
 	}
