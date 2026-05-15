@@ -255,8 +255,20 @@ func evaluateRule(r rule, events []event, atts []attestation) map[string]interfa
 	case "claim_match":
 		return evaluateClaimMatch(r, atts)
 	default:
-		return finding(r, "inconclusive", "inconclusive.required.unsupported_rule_category",
-			fmt.Sprintf("unknown rule category: %s", r.Category), nil, nil)
+		reason := unsupportedRuleCategoryReason(r.Category)
+		return finding(r, "inconclusive", reason,
+			fmt.Sprintf("rule category not evaluated: %s", r.Category), nil, nil)
+	}
+}
+
+func unsupportedRuleCategoryReason(category string) string {
+	switch category {
+	case "value_bound":
+		return "inconclusive.value_bound.unsupported_rule_category"
+	case "claim_match":
+		return "inconclusive.claim_match.unsupported_rule_category"
+	default:
+		return "inconclusive.required.unsupported_rule_category"
 	}
 }
 
@@ -472,7 +484,7 @@ func evaluateTemporal(r rule, events []event) map[string]interface{} {
 	}
 	maxDuration, err := parseISODuration(maxDur)
 	if err != nil {
-		return finding(r, "fail", "fail.temporal.window_violated",
+		return finding(r, "inconclusive", "inconclusive.temporal.duration_invalid",
 			fmt.Sprintf("temporal: invalid max duration %q", maxDur), nil, nil)
 	}
 

@@ -238,6 +238,26 @@ func TestVerifyTemporalRuleFail(t *testing.T) {
 	}
 }
 
+func TestVerifyTemporalInvalidMaxDurationInconclusive(t *testing.T) {
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[
+		{"event_id":"e1","action":"a","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"},
+		{"event_id":"e2","action":"b","status":"ok","started_at":"2026-05-12T00:00:02Z","completed_at":"2026-05-12T00:00:03Z"}
+	]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"temporal","severity":"medium","spec":{"from":{"action":"a"},"to":{"action":"b"},"max":"P10M"}}]}`)
+
+	run, err := Verify(flow, policy, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if run.Status != "inconclusive" {
+		t.Fatalf("expected inconclusive, got %s", run.Status)
+	}
+	reason := run.Findings[0]["reason"].(string)
+	if reason != "inconclusive.temporal.duration_invalid" {
+		t.Fatalf("reason: want inconclusive.temporal.duration_invalid, got %s", reason)
+	}
+}
+
 func TestVerifyConsensusUnanimousPass(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
 	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"consensus","severity":"critical","spec":{"claim":"refund.ok","sources":[{"kind":"external","source_id":"stripe"}],"threshold":{"unanimous":true}}}]}`)
