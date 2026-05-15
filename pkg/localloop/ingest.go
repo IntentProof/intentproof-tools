@@ -76,6 +76,18 @@ func (s *IngestServer) handleV1Events(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	if err := verifyEventSignature(ctx, s.DB, ev, hash[:]); err != nil {
+		switch {
+		case errors.Is(err, ErrUnknownSDK), errors.Is(err, ErrSignatureVerification):
+			w.WriteHeader(http.StatusUnauthorized)
+		case errors.Is(err, ErrInvalidRequest):
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
+	}
+
 	_, err = StoreEvent(ctx, s.DB, ev, hash[:])
 	if err != nil {
 		if errors.Is(err, ErrChainConflict) {

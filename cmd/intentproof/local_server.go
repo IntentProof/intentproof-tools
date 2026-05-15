@@ -29,6 +29,10 @@ func startLocalServer() error {
 	}
 	defer db.Close()
 
+	if err := localloop.BootstrapLocalRegistry(context.Background(), db, home); err != nil {
+		return fmt.Errorf("bootstrap local sdk registry: %w", err)
+	}
+
 	nats, err := localloop.StartEmbeddedNATS(dataDir)
 	if err != nil {
 		return fmt.Errorf("start nats: %w", err)

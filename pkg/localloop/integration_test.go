@@ -47,6 +47,10 @@ func TestIngestWritesFlowsEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pub := priv.Public().(ed25519.PublicKey)
+	if err := RegisterSDKInstance(ctx, db, "tnt_e2e", "inst_e2e", pub); err != nil {
+		t.Fatal(err)
+	}
 
 	ev1 := mustSignedEvent(t, priv, "tnt_e2e", "inst_e2e", "corr_e2e", 1,
 		"sha256:0000000000000000000000000000000000000000000000000000000000000000",
