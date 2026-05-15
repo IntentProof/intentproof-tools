@@ -18,6 +18,22 @@ import (
 var ErrChainConflict = errors.New("localloop: chain conflict")
 
 const schemaSQL = `
+CREATE TABLE IF NOT EXISTS tenants (
+    tenant_id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sdk_instances (
+    tenant_id TEXT NOT NULL,
+    instance_id TEXT NOT NULL,
+    public_key BLOB NOT NULL,
+    registered_at TEXT NOT NULL,
+    revoked_at TEXT,
+    PRIMARY KEY (tenant_id, instance_id)
+);
+
 CREATE TABLE IF NOT EXISTS execution_events (
     tenant_id TEXT NOT NULL,
     event_id TEXT NOT NULL,

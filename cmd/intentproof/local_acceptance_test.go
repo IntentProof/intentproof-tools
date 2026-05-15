@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,6 +41,27 @@ func TestLocalAcceptance(t *testing.T) {
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
+
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	instanceID := "inst_acceptance_1"
+	sdkDir := filepath.Join(tmpDir, ".intentproof", "sdk-node")
+	if err := os.MkdirAll(sdkDir, 0o700); err != nil {
+		t.Fatalf("mkdir sdk dir: %v", err)
+	}
+	kp := map[string]string{
+		"privateKey": base64.StdEncoding.EncodeToString(priv.Seed()),
+		"instanceId": instanceID,
+	}
+	kpRaw, err := json.Marshal(kp)
+	if err != nil {
+		t.Fatalf("marshal keypair: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sdkDir, "keypair.json"), kpRaw, 0o600); err != nil {
+		t.Fatalf("write keypair: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -82,27 +106,30 @@ func TestLocalAcceptance(t *testing.T) {
 		t.Fatalf("ingest endpoint did not become ready within 10s")
 	}
 
+	now := time.Now().UTC().Truncate(time.Millisecond)
 	event := localloop.ExecutionEvent{
 		Schema:        "intentproof.event.v1",
 		EventID:       "evt_01HZXTESTLOCAL01",
-		TenantID:      "tnt_local",
-		InstanceID:    "inst_local_1",
+		TenantID:      localloop.LocalTenantID,
+		InstanceID:    instanceID,
 		CorrelationID: "corr_acceptance_1",
 		PrevEventHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		ChainPosition: 1,
 		Intent:        "test",
 		Action:        "test.action",
 		Status:        "ok",
-		StartedAt:     time.Now().UTC(),
-		CompletedAt:   time.Now().UTC(),
+		StartedAt:     now,
+		CompletedAt:   now,
 		DurationMS:    1,
+		Inputs:        []any{},
+		Output:        map[string]any{"ok": true},
 		SpecVersion:   "v1",
 		SDKVersion:    "test",
-		Signature: localloop.Signature{
-			Alg:   "ed25519",
-			KeyID: "local",
-			Value: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-		},
+		Attributes:    map[string]any{},
+	}
+	event, err = localloop.SignExecutionEvent(event, priv)
+	if err != nil {
+		t.Fatalf("sign event: %v", err)
 	}
 	body, err := json.Marshal(event)
 	if err != nil {
