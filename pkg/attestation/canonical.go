@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/intentproof/intentproof-tools/pkg/canon"
 )
 
 // CanonicalSchema is the schema identifier embedded in every
@@ -26,7 +28,7 @@ const CanonicalSchema = "intentproof.attestation.v1"
 // MUST resolve to the same attestation id so the gateway can
 // idempotently insert.
 func DeriveAttestationID(tenantID, sourceID, sourceEventID string) string {
-	arr, _ := json.Marshal([3]string{tenantID, sourceID, sourceEventID})
+	arr, _ := canon.Marshal([3]string{tenantID, sourceID, sourceEventID})
 	seed := append([]byte{0x01}, arr...)
 	digest := sha256.Sum256(seed)
 	return "att_" + hex.EncodeToString(digest[:12])
@@ -86,32 +88,20 @@ func CanonicalBody(
 			sha256.Size, len(payloadHash),
 		)
 	}
-	typedBody := struct {
-		Schema            string         `json:"schema"`
-		AttestationID     string         `json:"attestation_id"`
-		TenantID          string         `json:"tenant_id"`
-		SourceID          string         `json:"source_id"`
-		ReceivedAt        string         `json:"received_at"`
-		SourceEmittedAt   string         `json:"source_emitted_at"`
-		Subject           map[string]any `json:"subject"`
-		Claim             string         `json:"claim"`
-		ClaimValue        any            `json:"claim_value"`
-		SourcePayloadHash string         `json:"source_payload_sha256"`
-		SourceSignature   map[string]any `json:"source_signature"`
-	}{
-		Schema:            CanonicalSchema,
-		AttestationID:     attestationID,
-		TenantID:          tenantID,
-		SourceID:          sourceID,
-		ReceivedAt:        receivedAt.UTC().Format(time.RFC3339Nano),
-		SourceEmittedAt:   result.SourceEmittedAt.UTC().Format(time.RFC3339Nano),
-		Subject:           Subject(result.SubjectType, result.SubjectID, correlationID),
-		Claim:             result.Claim,
-		ClaimValue:        decodeClaimValue(result.ClaimValue),
-		SourcePayloadHash: "sha256:" + hex.EncodeToString(payloadHash),
-		SourceSignature:   sourceSignature,
+	body := map[string]any{
+		"schema":                 CanonicalSchema,
+		"attestation_id":         attestationID,
+		"tenant_id":              tenantID,
+		"source_id":              sourceID,
+		"received_at":            receivedAt.UTC().Format(time.RFC3339Nano),
+		"source_emitted_at":      result.SourceEmittedAt.UTC().Format(time.RFC3339Nano),
+		"subject":                Subject(result.SubjectType, result.SubjectID, correlationID),
+		"claim":                  result.Claim,
+		"claim_value":            decodeClaimValue(result.ClaimValue),
+		"source_payload_sha256":  "sha256:" + hex.EncodeToString(payloadHash),
+		"source_signature":       sourceSignature,
 	}
-	return json.Marshal(typedBody)
+	return canon.Marshal(body)
 }
 
 // decodeClaimValue rehydrates an adapter's ClaimValue raw JSON into
