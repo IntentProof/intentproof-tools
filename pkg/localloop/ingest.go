@@ -66,12 +66,12 @@ func (s *IngestServer) handleV1Events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	canon, err := canonicalizeWithoutSignature(ev)
+	canonBytes, err := canonicalizeWithoutSignature(ev)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	hash := sha256.Sum256(canon)
+	hash := sha256.Sum256(canonBytes)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
