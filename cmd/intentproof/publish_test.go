@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/intentproof/intentproof-tools/pkg/crypto"
+	"github.com/intentproof/intentproof-tools/pkg/policysig"
 )
 
 func TestPolicyPublishCommandMissingFile(t *testing.T) {
@@ -227,7 +228,7 @@ rules:
 	// Verify the signature cryptographically.
 	delete(capturedBody, "signature")
 	delete(capturedBody, "signed_at")
-	payload, err := crypto.BuildPolicySignPayload(capturedBody)
+	payload, err := policysig.BuildPolicySignPayload(capturedBody)
 	if err != nil {
 		t.Fatalf("build payload: %v", err)
 	}

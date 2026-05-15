@@ -10,8 +10,6 @@ import (
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -78,64 +76,6 @@ func TestVerifierBadSignatureValue(t *testing.T) {
 	env := &SignatureEnvelope{Alg: "ed25519", Value: "!!!bad-base64"}
 	if err := verifier.Verify([]byte("x"), env, []byte("pub")); err == nil {
 		t.Fatal("expected error for bad base64 signature")
-	}
-}
-
-func TestBuildPolicySignPayload_Hash(t *testing.T) {
-	input := map[string]any{
-		"schema":             "intentproof.policy.v1",
-		"policy_id":          "tnt.test",
-		"policy_version":     1,
-		"tenant_id":          "tnt",
-		"spec_version":       "1.0.0",
-		"scope":              map[string]any{"any_event_action_in": []string{"a"}},
-		"rules":              []any{map[string]any{"id": "r1", "category": "required", "severity": "high", "spec": map[string]any{"action": "a"}}},
-		"policy_fingerprint": "sha256:abc",
-		"signature": map[string]any{
-			"alg": "ed25519",
-		},
-		"signed_at": "2026-01-01T00:00:00Z",
-	}
-	payload, err := BuildPolicySignPayload(input)
-	if err != nil {
-		t.Fatalf("build payload: %v", err)
-	}
-	wantHash := "7ffa54b2f15b9ab936a94eb3926a79bde8f66b0a81d0fee69b6c9d2c6a2fb07b"
-	gotHash := hex.EncodeToString(sha256Sum(payload))
-	if gotHash != wantHash {
-		t.Fatalf("payload hash mismatch: want %s, got %s", wantHash, gotHash)
-	}
-}
-
-func TestBuildPolicySignPayloadExcludesFingerprintAndSignature(t *testing.T) {
-	input := map[string]any{
-		"policy_id":          "tnt_acme.p",
-		"tenant_id":          "tnt_acme",
-		"policy_fingerprint": "sha256:abc",
-		"signature": map[string]any{
-			"alg": "ed25519",
-		},
-		"signed_at": "2026-01-01T00:00:00Z",
-	}
-	payload, err := BuildPolicySignPayload(input)
-	if err != nil {
-		t.Fatalf("build payload: %v", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(payload, &m); err != nil {
-		t.Fatalf("unmarshal payload: %v", err)
-	}
-	if _, ok := m["policy_fingerprint"]; ok {
-		t.Fatal("payload should exclude policy_fingerprint")
-	}
-	if _, ok := m["signature"]; ok {
-		t.Fatal("payload should exclude signature")
-	}
-	if _, ok := m["signed_at"]; ok {
-		t.Fatal("payload should exclude signed_at")
-	}
-	if _, ok := m["policy_id"]; !ok {
-		t.Fatal("payload should retain policy_id")
 	}
 }
 

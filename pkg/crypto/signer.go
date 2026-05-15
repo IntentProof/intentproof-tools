@@ -2,14 +2,10 @@ package crypto
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/intentproof/intentproof-tools/pkg/canon"
 )
 
 // SignatureEnvelope is the canonical JSON representation of a policy signature.
@@ -39,28 +35,6 @@ func NewPolicySignerFromEnv() (PolicySigner, error) {
 		return NewLocalEd25519PolicySignerFromBase64(keyB64)
 	}
 	return nil, nil
-}
-
-// BuildPolicySignPayload constructs the canonical byte slice that is signed.
-// It mirrors computeFingerprint's exclusion list to ensure the signed payload
-// is stable regardless of when signing occurs.
-func BuildPolicySignPayload(canonicalPolicy any) ([]byte, error) {
-	raw, err := json.Marshal(canonicalPolicy)
-	if err != nil {
-		return nil, fmt.Errorf("marshal policy: %w", err)
-	}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("unmarshal policy: %w", err)
-	}
-	delete(m, "policy_fingerprint")
-	delete(m, "signature")
-	delete(m, "signed_at")
-	canonical, err := canon.Marshal(m)
-	if err != nil {
-		return nil, fmt.Errorf("marshal canonical: %w", err)
-	}
-	return canonical, nil
 }
 
 // ParseRFC3339OrNow parses an RFC3339 string or returns the current time.
