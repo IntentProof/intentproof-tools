@@ -19,16 +19,17 @@ const CanonicalSchema = "intentproof.attestation.v1"
 // identifier for an inbound event. It is computed as
 // "att_" + hex(sha256(v1 || json([tenantID, sourceID, sourceEventID])))[:24].
 //
-// The seed is a version byte (0x01) followed by a canonical JSON
-// array of the three strings. JSON array encoding is unambiguous
-// regardless of the contents of the strings (no separator-collision
-// risk) and is stable across implementations.
+// The seed is a version byte (0x01) followed by a JSON array of the
+// three strings encoded with encoding/json.Marshal (including Go's
+// HTML-safe string escapes for <, >, &, U+2028, and U+2029). This is
+// not RFC 8785 JCS; the seed format is frozen for replay idempotency.
+// JSON array encoding is unambiguous regardless of string contents.
 //
 // Determinism is load-bearing: replays of the same upstream event
 // MUST resolve to the same attestation id so the gateway can
 // idempotently insert.
 func DeriveAttestationID(tenantID, sourceID, sourceEventID string) string {
-	arr, _ := canon.Marshal([3]string{tenantID, sourceID, sourceEventID})
+	arr, _ := json.Marshal([3]string{tenantID, sourceID, sourceEventID})
 	seed := append([]byte{0x01}, arr...)
 	digest := sha256.Sum256(seed)
 	return "att_" + hex.EncodeToString(digest[:12])
@@ -89,17 +90,17 @@ func CanonicalBody(
 		)
 	}
 	body := map[string]any{
-		"schema":                 CanonicalSchema,
-		"attestation_id":         attestationID,
-		"tenant_id":              tenantID,
-		"source_id":              sourceID,
-		"received_at":            receivedAt.UTC().Format(time.RFC3339Nano),
-		"source_emitted_at":      result.SourceEmittedAt.UTC().Format(time.RFC3339Nano),
-		"subject":                Subject(result.SubjectType, result.SubjectID, correlationID),
-		"claim":                  result.Claim,
-		"claim_value":            decodeClaimValue(result.ClaimValue),
-		"source_payload_sha256":  "sha256:" + hex.EncodeToString(payloadHash),
-		"source_signature":       sourceSignature,
+		"schema":                CanonicalSchema,
+		"attestation_id":        attestationID,
+		"tenant_id":             tenantID,
+		"source_id":             sourceID,
+		"received_at":           receivedAt.UTC().Format(time.RFC3339Nano),
+		"source_emitted_at":     result.SourceEmittedAt.UTC().Format(time.RFC3339Nano),
+		"subject":               Subject(result.SubjectType, result.SubjectID, correlationID),
+		"claim":                 result.Claim,
+		"claim_value":           decodeClaimValue(result.ClaimValue),
+		"source_payload_sha256": "sha256:" + hex.EncodeToString(payloadHash),
+		"source_signature":      sourceSignature,
 	}
 	return canon.Marshal(body)
 }

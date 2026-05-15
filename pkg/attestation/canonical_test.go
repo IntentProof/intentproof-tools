@@ -47,6 +47,23 @@ func TestDeriveAttestationID_DifferentiatesInputs(t *testing.T) {
 	}
 }
 
+func TestDeriveAttestationID_SeedUsesGoJSONEscaping(t *testing.T) {
+	// The ID seed must keep encoding/json semantics (not JCS). Go HTML-escapes
+	// < as \u003c in marshaled strings; RFC 8785 would emit a literal '<'.
+	tenant := "t<nt"
+	got := DeriveAttestationID(tenant, "src", "evt")
+	arr, err := json.Marshal([3]string{tenant, "src", "evt"})
+	if err != nil {
+		t.Fatalf("json.Marshal seed: %v", err)
+	}
+	seed := append([]byte{0x01}, arr...)
+	digest := sha256.Sum256(seed)
+	want := "att_" + hex.EncodeToString(digest[:12])
+	if got != want {
+		t.Fatalf("DeriveAttestationID = %q, want %q (seed %q)", got, want, arr)
+	}
+}
+
 func TestDeriveAttestationID_PipeSeparatorDoesNotCollide(t *testing.T) {
 	// Tenant "a|stripe" + source "webhook" + event "evt" must not
 	// collide with tenant "a" + source "stripe|webhook" + event
