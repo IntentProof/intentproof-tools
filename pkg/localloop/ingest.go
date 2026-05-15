@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/intentproof/intentproof-tools/pkg/canon"
 )
 
 // IngestServer is the HTTP server that receives ExecutionEvents.
@@ -64,12 +66,12 @@ func (s *IngestServer) handleV1Events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	canon, err := canonicalizeWithoutSignature(ev)
+	canonBytes, err := canonicalizeWithoutSignature(ev)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	hash := sha256.Sum256(canon)
+	hash := sha256.Sum256(canonBytes)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -142,7 +144,7 @@ func canonicalizeWithoutSignature(ev ExecutionEvent) ([]byte, error) {
 		return nil, err
 	}
 	delete(rawMap, "signature")
-	return json.Marshal(rawMap)
+	return canon.Marshal(rawMap)
 }
 
 // ListenAndServe starts the ingest HTTP server.

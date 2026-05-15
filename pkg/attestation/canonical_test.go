@@ -47,6 +47,23 @@ func TestDeriveAttestationID_DifferentiatesInputs(t *testing.T) {
 	}
 }
 
+func TestDeriveAttestationID_SeedUsesGoJSONEscaping(t *testing.T) {
+	// The ID seed must keep encoding/json semantics (not JCS). Go HTML-escapes
+	// < as \u003c in marshaled strings; RFC 8785 would emit a literal '<'.
+	tenant := "t<nt"
+	got := DeriveAttestationID(tenant, "src", "evt")
+	arr, err := json.Marshal([3]string{tenant, "src", "evt"})
+	if err != nil {
+		t.Fatalf("json.Marshal seed: %v", err)
+	}
+	seed := append([]byte{0x01}, arr...)
+	digest := sha256.Sum256(seed)
+	want := "att_" + hex.EncodeToString(digest[:12])
+	if got != want {
+		t.Fatalf("DeriveAttestationID = %q, want %q (seed %q)", got, want, arr)
+	}
+}
+
 func TestDeriveAttestationID_PipeSeparatorDoesNotCollide(t *testing.T) {
 	// Tenant "a|stripe" + source "webhook" + event "evt" must not
 	// collide with tenant "a" + source "stripe|webhook" + event
@@ -296,11 +313,35 @@ func TestCanonicalBody_EmptyClaimValueBecomesEmptyObject(t *testing.T) {
 	}
 }
 
+func TestCanonicalBody_JCSGoldenHash(t *testing.T) {
+	ts := newFixedTime(t)
+	result := Result{
+		SourceEventID:   "evt_1",
+		SourceEmittedAt: ts,
+		SubjectType:     "t",
+		SubjectID:       "i",
+		Claim:           "c",
+		ClaimValue:      json.RawMessage(`{}`),
+	}
+	raw, err := CanonicalBody("tn", "sr", "at", ts, result, nil, nil, []byte{})
+	if err != nil {
+		t.Fatalf("CanonicalBody: %v", err)
+	}
+	got := hex.EncodeToString(sha256Sum(raw))
+	const want = "5f9b920815b6813436a5d3cf0f8414579ff8f73cb2dc680ec37ed6dceb735dd9"
+	if got != want {
+		t.Fatalf("JCS canonical hash mismatch: want %s got %s\nbody=%s", want, got, raw)
+	}
+}
+
+func sha256Sum(b []byte) []byte {
+	d := sha256.Sum256(b)
+	return d[:]
+}
+
 func TestCanonicalBody_FieldOrderStable(t *testing.T) {
-	// encoding/json marshals struct fields in declaration order;
-	// pin the exact key order so any reorder of the struct
-	// definition breaks loudly. Order is part of the wire format
-	// because consumers sign sha256(bytes).
+	// RFC 8785 JCS sorts object keys lexicographically; pin order so the
+	// signed attestation body wire format cannot drift silently.
 	ts := newFixedTime(t)
 	result := Result{
 		SourceEventID:   "evt_1",
@@ -316,17 +357,17 @@ func TestCanonicalBody_FieldOrderStable(t *testing.T) {
 	}
 	s := string(raw)
 	wantOrder := []string{
-		`"schema"`,
 		`"attestation_id"`,
-		`"tenant_id"`,
-		`"source_id"`,
-		`"received_at"`,
-		`"source_emitted_at"`,
-		`"subject"`,
 		`"claim"`,
 		`"claim_value"`,
+		`"received_at"`,
+		`"schema"`,
+		`"source_emitted_at"`,
+		`"source_id"`,
 		`"source_payload_sha256"`,
 		`"source_signature"`,
+		`"subject"`,
+		`"tenant_id"`,
 	}
 	prev := -1
 	for _, key := range wantOrder {
