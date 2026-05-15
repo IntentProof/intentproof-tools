@@ -31,7 +31,7 @@ func TestSignRunAndVerify(t *testing.T) {
 	if err := os.WriteFile(flowPath, []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(policyPath, []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[]}`), 0o644); err != nil {
+	if err := os.WriteFile(policyPath, []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(attPath, []byte{}, 0o644); err != nil {

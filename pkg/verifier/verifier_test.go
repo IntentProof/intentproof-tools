@@ -3,10 +3,13 @@ package verifier
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/intentproof/intentproof-tools/pkg/policysig"
 )
 
 func TestCanonicalRunJSON_Hash(t *testing.T) {
@@ -16,7 +19,7 @@ func TestCanonicalRunJSON_Hash(t *testing.T) {
 	defer func() { nowFunc = origNow }()
 
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[{"event_id":"e1","action":"pay","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"}]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -27,7 +30,7 @@ func TestCanonicalRunJSON_Hash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CanonicalRunJSON: %v", err)
 	}
-	wantHash := "0be1803e237ccc37d85b1c8bb4206ad7019319cd90ece3a0a5bac872625ba1ab"
+	wantHash := "fb17414650d0db5a477dce5b20ded8ebc6017f6838739cae434ca27858eefdb5"
 	gotHash := hex.EncodeToString(sha256Sum(canonical))
 	if gotHash != wantHash {
 		t.Fatalf("canonical run hash mismatch: want %s, got %s", wantHash, gotHash)
@@ -46,7 +49,7 @@ func sha256Sum(data []byte) []byte {
 
 func TestVerifyEmptyFlowNoRules(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -65,7 +68,7 @@ func TestVerifyEmptyFlowNoRules(t *testing.T) {
 
 func TestVerifyRequiredRulePass(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[{"event_id":"e1","action":"pay","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"}]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -84,7 +87,7 @@ func TestVerifyRequiredRulePass(t *testing.T) {
 
 func TestVerifyRequiredRuleFail(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"required","severity":"high","spec":{"action":"pay","min":1}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"required","severity":"high","spec":{"action":"pay","min":1}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -103,7 +106,7 @@ func TestVerifyRequiredRuleWithWhere(t *testing.T) {
 		{"event_id":"e1","action":"pay","status":"error","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"},
 		{"event_id":"e2","action":"pay","status":"ok","started_at":"2026-05-12T00:00:02Z","completed_at":"2026-05-12T00:00:03Z"}
 	]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1,"where":{"status":"ok"}}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1,"where":{"status":"ok"}}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -116,7 +119,7 @@ func TestVerifyRequiredRuleWithWhere(t *testing.T) {
 
 func TestVerifyForbiddenRulePass(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[{"event_id":"e1","action":"ok-action","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"}]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"forbidden","severity":"critical","spec":{"action":"bad"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"forbidden","severity":"critical","spec":{"action":"bad"}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -129,7 +132,7 @@ func TestVerifyForbiddenRulePass(t *testing.T) {
 
 func TestVerifyForbiddenRuleFail(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[{"event_id":"e1","action":"bad","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"}]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"forbidden","severity":"critical","spec":{"action":"bad"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"forbidden","severity":"critical","spec":{"action":"bad"}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -145,7 +148,7 @@ func TestVerifyOrderingRulePass(t *testing.T) {
 		{"event_id":"e1","action":"a","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"},
 		{"event_id":"e2","action":"b","status":"ok","started_at":"2026-05-12T00:00:02Z","completed_at":"2026-05-12T00:00:03Z"}
 	]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"ordering","severity":"medium","spec":{"before":"a","after":"b"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"ordering","severity":"medium","spec":{"before":"a","after":"b"}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -161,7 +164,7 @@ func TestVerifyOrderingRuleFail(t *testing.T) {
 		{"event_id":"e1","action":"b","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"},
 		{"event_id":"e2","action":"a","status":"ok","started_at":"2026-05-12T00:00:02Z","completed_at":"2026-05-12T00:00:03Z"}
 	]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"ordering","severity":"medium","spec":{"before":"a","after":"b"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"ordering","severity":"medium","spec":{"before":"a","after":"b"}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -176,7 +179,7 @@ func TestVerifyCardinalityExactly(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[
 		{"event_id":"e1","action":"pay","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"}
 	]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"cardinality","severity":"medium","spec":{"action":"pay","exactly":1}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"cardinality","severity":"medium","spec":{"action":"pay","exactly":1}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -192,7 +195,7 @@ func TestVerifyCardinalityFail(t *testing.T) {
 		{"event_id":"e1","action":"pay","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"},
 		{"event_id":"e2","action":"pay","status":"ok","started_at":"2026-05-12T00:00:02Z","completed_at":"2026-05-12T00:00:03Z"}
 	]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"cardinality","severity":"medium","spec":{"action":"pay","exactly":1}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"cardinality","severity":"medium","spec":{"action":"pay","exactly":1}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -208,7 +211,7 @@ func TestVerifyTemporalRulePass(t *testing.T) {
 		{"event_id":"e1","action":"a","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"},
 		{"event_id":"e2","action":"b","status":"ok","started_at":"2026-05-12T00:00:02Z","completed_at":"2026-05-12T00:00:03Z"}
 	]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"temporal","severity":"medium","spec":{"from":{"action":"a"},"to":{"action":"b"},"max":"PT10M"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"temporal","severity":"medium","spec":{"from":{"action":"a"},"to":{"action":"b"},"max":"PT10M"}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -224,7 +227,7 @@ func TestVerifyTemporalRuleFail(t *testing.T) {
 		{"event_id":"e1","action":"a","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"},
 		{"event_id":"e2","action":"b","status":"ok","started_at":"2026-05-12T00:01:00Z","completed_at":"2026-05-12T00:01:01Z"}
 	]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"temporal","severity":"medium","spec":{"from":{"action":"a"},"to":{"action":"b"},"max":"PT30S"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"temporal","severity":"medium","spec":{"from":{"action":"a"},"to":{"action":"b"},"max":"PT30S"}}]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -237,7 +240,7 @@ func TestVerifyTemporalRuleFail(t *testing.T) {
 
 func TestVerifyConsensusUnanimousPass(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"consensus","severity":"critical","spec":{"claim":"refund.ok","sources":[{"kind":"external","source_id":"stripe"}],"threshold":{"unanimous":true}}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"consensus","severity":"critical","spec":{"claim":"refund.ok","sources":[{"kind":"external","source_id":"stripe"}],"threshold":{"unanimous":true}}}]}`)
 	atts := []byte(`{"schema":"intentproof.attestation.v1","attestation_id":"a1","tenant_id":"tnt","source_id":"stripe","received_at":"2026-05-12T00:00:00Z","source_emitted_at":"2026-05-12T00:00:00Z","subject":{"type":"refund","id":"r1","mapping_to":{"correlation_id":"c1"}},"claim":"refund.ok","claim_value":true,"source_payload_sha256":"sha256:0000","source_signature":{"alg":"ed25519","key_id":"k1","value":"sig"},"platform_signature":{"alg":"ed25519","key_id":"p1","value":"psig"}}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -251,7 +254,7 @@ func TestVerifyConsensusUnanimousPass(t *testing.T) {
 
 func TestVerifyConsensusDisagreement(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"consensus","severity":"critical","spec":{"claim":"refund.ok","expected_value":true,"sources":[{"kind":"external","source_id":"stripe"}],"threshold":{"unanimous":true}}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"consensus","severity":"critical","spec":{"claim":"refund.ok","expected_value":true,"sources":[{"kind":"external","source_id":"stripe"}],"threshold":{"unanimous":true}}}]}`)
 	atts := []byte(`{"schema":"intentproof.attestation.v1","attestation_id":"a1","tenant_id":"tnt","source_id":"stripe","received_at":"2026-05-12T00:00:00Z","source_emitted_at":"2026-05-12T00:00:00Z","subject":{"type":"refund","id":"r1","mapping_to":{"correlation_id":"c1"}},"claim":"refund.ok","claim_value":false,"source_payload_sha256":"sha256:0000","source_signature":{"alg":"ed25519","key_id":"k1","value":"sig"},"platform_signature":{"alg":"ed25519","key_id":"p1","value":"psig"}}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -274,7 +277,7 @@ func TestVerifyDeterministicFingerprint(t *testing.T) {
 	defer func() { nowFunc = origNow }()
 
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[{"event_id":"e1","action":"pay","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"}]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1}}]}`)
 
 	run1, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -293,7 +296,7 @@ func TestVerifyMultipleRulesMixedOutcomes(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[
 		{"event_id":"e1","action":"pay","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"}
 	]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[
 		{"id":"r1","category":"required","severity":"medium","spec":{"action":"pay","min":1}},
 		{"id":"r2","category":"forbidden","severity":"high","spec":{"action":"bad"}}
 	]}`)
@@ -318,7 +321,7 @@ func TestVerifyMultipleRulesMixedOutcomes(t *testing.T) {
 
 func TestVerifySummaryCountsOnFail(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[
 		{"id":"r1","category":"required","severity":"critical","spec":{"action":"pay","min":1}},
 		{"id":"r2","category":"forbidden","severity":"info","spec":{"action":"bad"}}
 	]}`)
@@ -340,7 +343,7 @@ func TestVerifySummaryCountsOnFail(t *testing.T) {
 
 func TestVerifyAttestationSet(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[]}`)
 	atts := []byte(
 		`{"schema":"intentproof.attestation.v1","attestation_id":"a1","tenant_id":"tnt","source_id":"stripe","received_at":"2026-05-12T00:00:00Z","source_emitted_at":"2026-05-12T00:00:00Z","subject":{"type":"refund","id":"r1","mapping_to":{"correlation_id":"c1"}},"claim":"refund.ok","claim_value":true,"source_payload_sha256":"sha256:0000","source_signature":{"alg":"ed25519","key_id":"k1","value":"sig"},"platform_signature":{"alg":"ed25519","key_id":"p1","value":"psig"}}` + "\n" +
 			`{"schema":"intentproof.attestation.v1","attestation_id":"a2","tenant_id":"tnt","source_id":"stripe","received_at":"2026-05-12T00:00:00Z","source_emitted_at":"2026-05-12T00:00:00Z","subject":{"type":"refund","id":"r1","mapping_to":{"correlation_id":"c1"}},"claim":"refund.ok","claim_value":true,"source_payload_sha256":"sha256:0000","source_signature":{"alg":"ed25519","key_id":"k1","value":"sig"},"platform_signature":{"alg":"ed25519","key_id":"p1","value":"psig"}}`)
@@ -359,7 +362,7 @@ func TestVerifyAttestationSet(t *testing.T) {
 
 func TestVerifyRunStructure(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -403,7 +406,7 @@ func TestVerifyJSONParseErrors(t *testing.T) {
 
 func TestVerifyFingerprintExcludesItselfAndSignature(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[]}`)
 
 	run, err := Verify(flow, policy, nil)
 	if err != nil {
@@ -431,7 +434,7 @@ func TestVerifyFingerprintExcludesItselfAndSignature(t *testing.T) {
 
 func TestVerifyValueBoundPass(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"risk.score","operator":"lte","value":0.8}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"risk.score","operator":"lte","value":0.8}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"model","claim":"risk.score","claim_value":0.5}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -448,7 +451,7 @@ func TestVerifyValueBoundPass(t *testing.T) {
 
 func TestVerifyValueBoundFail(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"high","spec":{"claim":"risk.score","operator":"lte","value":0.8}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"high","spec":{"claim":"risk.score","operator":"lte","value":0.8}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"model","claim":"risk.score","claim_value":0.9}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -465,7 +468,7 @@ func TestVerifyValueBoundFail(t *testing.T) {
 
 func TestVerifyValueBoundInconclusiveMissingClaim(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"operator":"lte","value":0.8}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"operator":"lte","value":0.8}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"model","claim":"risk.score","claim_value":0.5}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -482,7 +485,7 @@ func TestVerifyValueBoundInconclusiveMissingClaim(t *testing.T) {
 
 func TestVerifyValueBoundNonNumericClaimValue(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"risk.score","operator":"lte","value":0.8}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"risk.score","operator":"lte","value":0.8}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"model","claim":"risk.score","claim_value":"high"}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -500,7 +503,7 @@ func TestVerifyValueBoundNonNumericClaimValue(t *testing.T) {
 
 func TestVerifyValueBoundWithSourceIDFilter(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"risk.score","operator":"lte","value":0.8,"source_id":"model-a"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"risk.score","operator":"lte","value":0.8,"source_id":"model-a"}}]}`)
 	atts := []byte(
 		`{"attestation_id":"a1","source_id":"model-a","claim":"risk.score","claim_value":0.5}` + "\n" +
 			`{"attestation_id":"a2","source_id":"model-b","claim":"risk.score","claim_value":0.9}`)
@@ -521,7 +524,7 @@ func TestVerifyValueBoundWithSourceIDFilter(t *testing.T) {
 
 func TestVerifyClaimMatchPass(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"claim_match","severity":"medium","spec":{"claim":"refund.ok","expected_value":true}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"claim_match","severity":"medium","spec":{"claim":"refund.ok","expected_value":true}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"stripe","claim":"refund.ok","claim_value":true}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -538,7 +541,7 @@ func TestVerifyClaimMatchPass(t *testing.T) {
 
 func TestVerifyClaimMatchFail(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"claim_match","severity":"high","spec":{"claim":"refund.ok","expected_value":true}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"claim_match","severity":"high","spec":{"claim":"refund.ok","expected_value":true}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"stripe","claim":"refund.ok","claim_value":false}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -555,7 +558,7 @@ func TestVerifyClaimMatchFail(t *testing.T) {
 
 func TestVerifyClaimMatchInconclusiveMissingExpectedValue(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"claim_match","severity":"medium","spec":{"claim":"refund.ok"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"claim_match","severity":"medium","spec":{"claim":"refund.ok"}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"stripe","claim":"refund.ok","claim_value":true}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -572,7 +575,7 @@ func TestVerifyClaimMatchInconclusiveMissingExpectedValue(t *testing.T) {
 
 func TestVerifyClaimMatchWithSourceIDFilter(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"claim_match","severity":"medium","spec":{"claim":"refund.ok","expected_value":true,"source_id":"stripe"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"claim_match","severity":"medium","spec":{"claim":"refund.ok","expected_value":true,"source_id":"stripe"}}]}`)
 	atts := []byte(
 		`{"attestation_id":"a1","source_id":"stripe","claim":"refund.ok","claim_value":true}` + "\n" +
 			`{"attestation_id":"a2","source_id":"internal","claim":"refund.ok","claim_value":false}`)
@@ -614,7 +617,7 @@ func TestVerifyValueBoundOperators(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.operator, func(t *testing.T) {
 			flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-			policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"` + tc.operator + `","value":` + fmt.Sprintf("%v", tc.bound) + `}}]}`)
+			policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"` + tc.operator + `","value":` + fmt.Sprintf("%v", tc.bound) + `}}]}`)
 			atts := []byte(`{"attestation_id":"a1","source_id":"s1","claim":"score","claim_value":` + fmt.Sprintf("%v", tc.value) + `}`)
 
 			run, err := Verify(flow, policy, atts)
@@ -631,7 +634,7 @@ func TestVerifyValueBoundOperators(t *testing.T) {
 
 func TestVerifyValueBoundMissingSpecValue(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"lte"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"lte"}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"s1","claim":"score","claim_value":5}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -648,7 +651,7 @@ func TestVerifyValueBoundMissingSpecValue(t *testing.T) {
 
 func TestVerifyValueBoundUnknownOperator(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"unknown_op","value":10}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"unknown_op","value":10}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"s1","claim":"score","claim_value":5}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -665,7 +668,7 @@ func TestVerifyValueBoundUnknownOperator(t *testing.T) {
 
 func TestVerifyValueBoundNonNumericSpecValue(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:abc","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:fp","rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"lte","value":"high"}}]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"value_bound","severity":"medium","spec":{"claim":"score","operator":"lte","value":"high"}}]}`)
 	atts := []byte(`{"attestation_id":"a1","source_id":"s1","claim":"score","claim_value":5}`)
 
 	run, err := Verify(flow, policy, atts)
@@ -677,5 +680,44 @@ func TestVerifyValueBoundNonNumericSpecValue(t *testing.T) {
 	}
 	if run.Findings[0]["outcome"] != "inconclusive" {
 		t.Fatalf("expected finding inconclusive, got %v", run.Findings[0]["outcome"])
+	}
+}
+
+func TestVerifyDeclaredPolicyFingerprintMatch(t *testing.T) {
+	policyObj := map[string]any{
+		"policy_id":      "p1",
+		"tenant_id":      "tnt",
+		"policy_version": float64(1),
+		"rules": []any{
+			map[string]any{
+				"id": "r1", "category": "required", "severity": "medium",
+				"spec": map[string]any{"action": "pay", "min": float64(1)},
+			},
+		},
+	}
+	fp, err := policysig.ComputeFingerprint(policyObj)
+	if err != nil {
+		t.Fatalf("ComputeFingerprint: %v", err)
+	}
+	policyObj["policy_fingerprint"] = fp
+	policyData, err := json.Marshal(policyObj)
+	if err != nil {
+		t.Fatalf("marshal policy: %v", err)
+	}
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0","events":[]}`)
+	if _, err := Verify(flow, policyData, nil); err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+}
+
+func TestVerifyDeclaredPolicyFingerprintMismatch(t *testing.T) {
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"policy_fingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","rules":[]}`)
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0","events":[]}`)
+	_, err := Verify(flow, policy, nil)
+	if err == nil {
+		t.Fatal("expected fingerprint mismatch error")
+	}
+	if !strings.Contains(err.Error(), "policy fingerprint mismatch") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

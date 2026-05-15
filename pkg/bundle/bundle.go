@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/canon"
+	"github.com/intentproof/intentproof-tools/pkg/policysig"
 )
 
 // Manifest is the canonical bundle manifest. It is signed by the platform
@@ -272,6 +273,37 @@ func Verify(r io.Reader, pubkey []byte) (*VerifyResult, error) {
 			return &VerifyResult{Status: "fail", Reason: "bundle.file_hash_mismatch", Findings: findings}, nil
 		}
 		findings = append(findings, fmt.Sprintf("file_hash_valid:%s", entry.Path))
+	}
+
+	// 2.5 Declared policy fingerprint vs Tier-1 canonical hash (when present).
+	if raw, ok := b.RawFiles["policy.json"]; ok {
+		raw = bytes.TrimSpace(raw)
+		if len(raw) > 0 {
+			var policyMap map[string]any
+			if err := json.Unmarshal(raw, &policyMap); err != nil {
+				findings = append(findings, "policy.json_decode_failed")
+				return nil, fmt.Errorf("bundle.policy_json_decode_failed: %w", err)
+			}
+			if fpVal, has := policyMap["policy_fingerprint"]; has {
+				fp, ok := fpVal.(string)
+				if ok && strings.TrimSpace(fp) != "" {
+					computed, err := policysig.ComputeFingerprint(policyMap)
+					if err != nil {
+						findings = append(findings, "policy.fingerprint_error")
+						return nil, fmt.Errorf("bundle.policy_fingerprint_compute: %w", err)
+					}
+					if fp != computed {
+						findings = append(findings, "policy.fingerprint_mismatch")
+						return &VerifyResult{
+							Status:   "fail",
+							Reason:   "bundle.policy_fingerprint_mismatch",
+							Findings: findings,
+						}, nil
+					}
+					findings = append(findings, "policy.fingerprint_valid")
+				}
+			}
+		}
 	}
 
 	// 3. Verify event Merkle root.

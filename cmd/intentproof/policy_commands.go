@@ -18,6 +18,7 @@ import (
 
 	"github.com/intentproof/intentproof-tools/pkg/crypto"
 	"github.com/intentproof/intentproof-tools/pkg/policy"
+	"github.com/intentproof/intentproof-tools/pkg/policysig"
 	"github.com/intentproof/intentproof-tools/pkg/verifier"
 )
 
@@ -340,7 +341,7 @@ func maybeSignPolicy(result *policy.CompileResult) (map[string]any, error) {
 		return bodyMap, nil
 	}
 
-	payload, err := crypto.BuildPolicySignPayload(bodyMap)
+	payload, err := policysig.BuildPolicySignPayload(bodyMap)
 	if err != nil {
 		return nil, fmt.Errorf("build sign payload: %w", err)
 	}

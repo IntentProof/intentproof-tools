@@ -276,6 +276,38 @@ func buildTestBundleOpts(t *testing.T, signerPriv ed25519.PrivateKey) CreateOpti
 	return opts
 }
 
+func TestVerifyPolicyFingerprintMismatchBundle(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	pub := priv.Public().(ed25519.PublicKey)
+
+	opts := buildTestBundleOpts(t, priv)
+	opts.PolicyJSON, err = json.Marshal(map[string]interface{}{
+		"policy_id":          "p1",
+		"policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		"rules":              []interface{}{},
+	})
+	if err != nil {
+		t.Fatalf("marshal policy: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := Create(&buf, opts); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	res, err := Verify(&buf, pub)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if res.Status != "fail" || res.Reason != "bundle.policy_fingerprint_mismatch" {
+		t.Fatalf("expected policy fingerprint mismatch, got status=%s reason=%s findings=%v",
+			res.Status, res.Reason, res.Findings)
+	}
+}
+
 func hasFinding(findings []string, needle string) bool {
 	for _, f := range findings {
 		if f == needle {

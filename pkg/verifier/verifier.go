@@ -12,6 +12,7 @@ import (
 
 	"github.com/intentproof/intentproof-tools/pkg/canon"
 	"github.com/intentproof/intentproof-tools/pkg/merkle"
+	"github.com/intentproof/intentproof-tools/pkg/policysig"
 )
 
 // nowFunc is swappable for deterministic tests.
@@ -112,6 +113,13 @@ func Verify(flowData []byte, policyData []byte, attestationsData []byte) (*Verif
 	if err := json.Unmarshal(policyData, &policy); err != nil {
 		return nil, fmt.Errorf("parse policy: %w", err)
 	}
+	var policyRaw map[string]any
+	if err := json.Unmarshal(policyData, &policyRaw); err != nil {
+		return nil, fmt.Errorf("parse policy map: %w", err)
+	}
+	if err := validateDeclaredPolicyFingerprint(policyRaw); err != nil {
+		return nil, err
+	}
 	if flow.TenantID != "" && policy.TenantID != "" && flow.TenantID != policy.TenantID {
 		return nil, fmt.Errorf("tenant mismatch: flow tenant %q does not match policy tenant %q", flow.TenantID, policy.TenantID)
 	}
@@ -181,6 +189,31 @@ func Verify(flowData []byte, policyData []byte, attestationsData []byte) (*Verif
 	run.RunFingerprint = fingerprint
 
 	return run, nil
+}
+
+// validateDeclaredPolicyFingerprint returns an error when policy JSON carries a
+// non-empty policy_fingerprint that does not match Tier-1 canonical hashing.
+// Policies with no fingerprint (common in unit tests) skip this check.
+func validateDeclaredPolicyFingerprint(policy map[string]any) error {
+	fpVal, ok := policy["policy_fingerprint"]
+	if !ok || fpVal == nil {
+		return nil
+	}
+	fp, ok := fpVal.(string)
+	if !ok || strings.TrimSpace(fp) == "" {
+		return nil
+	}
+	computed, err := policysig.ComputeFingerprint(policy)
+	if err != nil {
+		return fmt.Errorf("policy fingerprint: %w", err)
+	}
+	if fp != computed {
+		return fmt.Errorf(
+			"policy fingerprint mismatch: declared %q != computed %q",
+			fp, computed,
+		)
+	}
+	return nil
 }
 
 func parseAttestations(data []byte) ([]attestation, error) {
