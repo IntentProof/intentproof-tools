@@ -41,9 +41,8 @@ in `intentproof-core` under BSL 1.1.
 
 Apache License 2.0. See `LICENSE` and `NOTICE`.
 
-Contributions are accepted under the
-[Developer Certificate of Origin](https://developercertificate.org/)
-via `Signed-off-by:` trailers on every commit. See `CONTRIBUTING.md`.
+Issues welcome — see `CONTRIBUTING.md`. Maintainer commits use DCO
+`Signed-off-by:` trailers.
 
 ## Local development
 
