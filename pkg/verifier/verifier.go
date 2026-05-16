@@ -803,9 +803,13 @@ func finding(
 	if evidenceAttestationIDs == nil {
 		evidenceAttestationIDs = []string{}
 	}
+	ruleCategory := r.Category
+	if reasonCode == "inconclusive.unknown.unsupported_rule_category" {
+		ruleCategory = "unknown"
+	}
 	m := map[string]interface{}{
 		"rule_id":            r.ID,
-		"rule_category":      r.Category,
+		"rule_category":      ruleCategory,
 		"outcome":            outcome,
 		"severity":           r.Severity,
 		"reason":             reasonCode,

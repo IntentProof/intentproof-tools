@@ -273,6 +273,9 @@ func TestVerifyNonDSLRuleCategoryUsesUnknownReason(t *testing.T) {
 	if reason != "inconclusive.unknown.unsupported_rule_category" {
 		t.Fatalf("reason: want inconclusive.unknown.unsupported_rule_category, got %s", reason)
 	}
+	if run.Findings[0]["rule_category"].(string) != "unknown" {
+		t.Fatalf("rule_category: want unknown, got %v", run.Findings[0]["rule_category"])
+	}
 }
 
 func TestVerifyConsensusUnanimousPass(t *testing.T) {
