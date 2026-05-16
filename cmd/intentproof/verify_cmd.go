@@ -12,7 +12,7 @@ import (
 
 func runVerify(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
-		writeUsage(stderr, "Usage: intentproof verify <bundle.proof.tar>")
+		writeUsage(stderr, "Usage: intentproof verify <bundle.proof.tar.zst>")
 		return 1
 	}
 	path := args[0]

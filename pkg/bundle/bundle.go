@@ -18,21 +18,23 @@ import (
 	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/canon"
+	"github.com/intentproof/intentproof-tools/pkg/merkle"
 	"github.com/intentproof/intentproof-tools/pkg/policysig"
+	"github.com/klauspost/compress/zstd"
 )
 
 // Manifest is the canonical bundle manifest. It is signed by the platform
 // and included in the bundle as manifest.json.
 type Manifest struct {
-	Schema       string            `json:"schema"`
-	BundleID     string            `json:"bundle_id"`
-	CreatedAt    string            `json:"created_at"`
-	FlowID       string            `json:"flow_id"`
-	TenantID     string            `json:"tenant_id"`
-	Files        []ManifestEntry   `json:"files"`
-	EventMerkle  string            `json:"event_merkle_root"`
-	AttMerkle    string            `json:"attestation_merkle_root"`
-	Signature    *SignatureEnvelope `json:"signature,omitempty"`
+	Schema      string             `json:"schema"`
+	BundleID    string             `json:"bundle_id"`
+	CreatedAt   string             `json:"created_at"`
+	FlowID      string             `json:"flow_id"`
+	TenantID    string             `json:"tenant_id"`
+	Files       []ManifestEntry    `json:"files"`
+	EventMerkle string             `json:"event_merkle_root"`
+	AttMerkle   string             `json:"attestation_merkle_root"`
+	Signature   *SignatureEnvelope `json:"signature,omitempty"`
 }
 
 type ManifestEntry struct {
@@ -41,9 +43,9 @@ type ManifestEntry struct {
 }
 
 type SignatureEnvelope struct {
-	Alg    string `json:"alg"`
-	KeyID  string `json:"key_id"`
-	Value  string `json:"value"`
+	Alg   string `json:"alg"`
+	KeyID string `json:"key_id"`
+	Value string `json:"value"`
 }
 
 // Bundle holds the in-memory representation of an extracted bundle.
@@ -62,9 +64,9 @@ type Bundle struct {
 
 // VerifyResult is the output of bundle verification.
 type VerifyResult struct {
-	Status    string   `json:"status"` // "pass", "fail", "inconclusive"
-	Reason    string   `json:"reason"`
-	Findings  []string `json:"findings"`
+	Status   string   `json:"status"` // "pass", "fail", "inconclusive"
+	Reason   string   `json:"reason"`
+	Findings []string `json:"findings"`
 }
 
 // ---------------------------------------------------------------------------
@@ -73,28 +75,28 @@ type VerifyResult struct {
 
 // CreateOptions holds the inputs needed to build a bundle.
 type CreateOptions struct {
-	BundleID       string
-	FlowID         string
-	TenantID       string
-	FlowJSON       []byte
-	EventsJSONL    []byte
+	BundleID          string
+	FlowID            string
+	TenantID          string
+	FlowJSON          []byte
+	EventsJSONL       []byte
 	AttestationsJSONL []byte
-	PolicyJSON     []byte
-	RunJSON        []byte
-	CertificateJSON []byte
-	InclusionProof []byte
-	PublicKeys     map[string][]byte
-	Signer         func([]byte) (*SignatureEnvelope, error)
+	PolicyJSON        []byte
+	RunJSON           []byte
+	CertificateJSON   []byte
+	InclusionProof    []byte
+	PublicKeys        map[string][]byte
+	Signer            func([]byte) (*SignatureEnvelope, error)
 }
 
 // Create builds a bundle and writes it to the given writer as a tar.zst stream.
 func Create(w io.Writer, opts CreateOptions) error {
 	files := map[string][]byte{
-		"flow.json":        opts.FlowJSON,
-		"events.jsonl":     opts.EventsJSONL,
+		"flow.json":          opts.FlowJSON,
+		"events.jsonl":       opts.EventsJSONL,
 		"attestations.jsonl": opts.AttestationsJSONL,
-		"policy.json":      opts.PolicyJSON,
-		"run.json":         opts.RunJSON,
+		"policy.json":        opts.PolicyJSON,
+		"run.json":           opts.RunJSON,
 	}
 	if len(opts.CertificateJSON) > 0 {
 		files["certificate.json"] = opts.CertificateJSON
@@ -121,18 +123,18 @@ func Create(w io.Writer, opts CreateOptions) error {
 	})
 
 	events := parseJSONL(opts.EventsJSONL)
-	atts   := parseJSONL(opts.AttestationsJSONL)
+	atts := parseJSONL(opts.AttestationsJSONL)
 
-	eventMerkle  := computeItemMerkle(events, "event_id")
-	attMerkle    := computeItemMerkle(atts,   "attestation_id")
+	eventMerkle := computeItemMerkle(events, "event_id")
+	attMerkle := computeItemMerkle(atts, "attestation_id")
 
 	manifest := &Manifest{
-		Schema:    "intentproof.bundle.manifest.v1",
-		BundleID:  opts.BundleID,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		FlowID:    opts.FlowID,
-		TenantID:  opts.TenantID,
-		Files:     manifestEntries,
+		Schema:      "intentproof.bundle.manifest.v1",
+		BundleID:    opts.BundleID,
+		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		FlowID:      opts.FlowID,
+		TenantID:    opts.TenantID,
+		Files:       manifestEntries,
 		EventMerkle: eventMerkle,
 		AttMerkle:   attMerkle,
 	}
@@ -175,13 +177,18 @@ func Create(w io.Writer, opts CreateOptions) error {
 		return err
 	}
 
-	// Write tar.zst
-	// NOTE: zstd.Writer requires github.com/klauspost/compress/zstd.
-	// We write the raw tar bytes plus a wrapper header indicating zstd.
-	// For now, write plain tar to maintain zero new dependencies.
-	// TODO: switch to zstd once dependency is added.
-	_, err = io.Copy(w, &tarBuf)
-	return err
+	zw, err := zstd.NewWriter(w)
+	if err != nil {
+		return fmt.Errorf("create zstd writer: %w", err)
+	}
+	if _, err := io.Copy(zw, &tarBuf); err != nil {
+		_ = zw.Close()
+		return fmt.Errorf("write zstd bundle: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("close zstd bundle: %w", err)
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +197,10 @@ func Create(w io.Writer, opts CreateOptions) error {
 
 // Verify reads a bundle from the given reader and performs full verification.
 func Verify(r io.Reader, pubkey []byte) (*VerifyResult, error) {
-	tr := tar.NewReader(r)
+	tr, err := bundleTarReader(r)
+	if err != nil {
+		return nil, err
+	}
 	b := &Bundle{PublicKeys: map[string][]byte{}, RawFiles: map[string][]byte{}}
 	findings := []string{}
 
@@ -330,6 +340,30 @@ func Verify(r io.Reader, pubkey []byte) (*VerifyResult, error) {
 	return &VerifyResult{Status: "pass", Reason: "bundle.verify_pass", Findings: findings}, nil
 }
 
+func bundleTarReader(r io.Reader) (*tar.Reader, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("bundle.read_failed: %w", err)
+	}
+	if isZstdFrame(data) {
+		zr, err := zstd.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, fmt.Errorf("bundle.zstd_read_failed: %w", err)
+		}
+		decoded, err := io.ReadAll(zr)
+		zr.Close()
+		if err != nil {
+			return nil, fmt.Errorf("bundle.zstd_decode_failed: %w", err)
+		}
+		return tar.NewReader(bytes.NewReader(decoded)), nil
+	}
+	return tar.NewReader(bytes.NewReader(data)), nil
+}
+
+func isZstdFrame(data []byte) bool {
+	return len(data) >= 4 && data[0] == 0x28 && data[1] == 0xb5 && data[2] == 0x2f && data[3] == 0xfd
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -402,53 +436,12 @@ func computeItemMerkle(items []map[string]interface{}, idField string) string {
 		ids[i] = v
 	}
 	if len(ids) == 0 {
-		return "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		return merkle.RootHex(nil)
 	}
 	sort.Strings(ids)
 	leaves := make([][]byte, len(ids))
 	for i, id := range ids {
 		leaves[i] = []byte(id)
 	}
-	// Import pkg/merkle lazily to avoid circular imports in stub phase.
-	// Once this package is wired into the real build, use merkle.RootHex.
-	return merkleRootHex(leaves)
-}
-
-// merkleRootHex is a minimal RFC 6962-like root for items until we import
-// the real pkg/merkle. It uses HashLeaf on each item and then pairs them.
-func merkleRootHex(leaves [][]byte) string {
-	if len(leaves) == 0 {
-		return "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	}
-	hashes := make([][]byte, len(leaves))
-	for i, leaf := range leaves {
-		hashes[i] = hashLeaf(leaf)
-	}
-	for len(hashes) > 1 {
-		next := make([][]byte, 0, (len(hashes)+1)/2)
-		for i := 0; i < len(hashes); i += 2 {
-			if i+1 < len(hashes) {
-				next = append(next, hashInternal(hashes[i], hashes[i+1]))
-			} else {
-				next = append(next, hashes[i]) // promote
-			}
-		}
-		hashes = next
-	}
-	return "sha256:" + hex.EncodeToString(hashes[0])
-}
-
-func hashLeaf(data []byte) []byte {
-	h := sha256.New()
-	_, _ = h.Write([]byte{0x00})
-	_, _ = h.Write(data)
-	return h.Sum(nil)
-}
-
-func hashInternal(left, right []byte) []byte {
-	h := sha256.New()
-	_, _ = h.Write([]byte{0x01})
-	_, _ = h.Write(left)
-	_, _ = h.Write(right)
-	return h.Sum(nil)
+	return merkle.RootHex(leaves)
 }

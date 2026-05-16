@@ -27,7 +27,7 @@ func TestRunRefundEndToEnd(t *testing.T) {
 	if err := RunRefund(ctx, opt); err != nil {
 		t.Fatal(err)
 	}
-	bundlePath := filepath.Join(work, "demo-refund.proof.tar")
+	bundlePath := filepath.Join(work, "demo-refund.proof.tar.zst")
 	raw, err := os.ReadFile(bundlePath)
 	if err != nil {
 		t.Fatal(err)
