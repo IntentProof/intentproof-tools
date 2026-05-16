@@ -70,6 +70,7 @@ func startLocalServer() error {
 	fmt.Println()
 	fmt.Println("Ingest endpoint:", ingestURL+"/v1/events")
 	fmt.Println("Verifier API:   ", verifierURL+"/v1/verify/run")
+	fmt.Println("Bundle verify:  ", verifierURL+"/v1/verify/bundle")
 	fmt.Println("Dashboard:      ", dashboardURL+"/")
 	fmt.Println("NATS endpoint:  ", nats.URL())
 	fmt.Println("\nWhen you run code with INTENTPROOF_INGEST_URL=" + ingestURL + "/v1/events,")
