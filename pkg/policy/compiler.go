@@ -134,6 +134,18 @@ func Compile(raw []byte) (*CompileResult, error) {
 		return nil, errors.New("scope requires match_action or any_event_action_in")
 	}
 
+	seenRuleIDs := make(map[string]struct{}, len(input.Rules))
+	for _, rule := range input.Rules {
+		id := strings.TrimSpace(rule.ID)
+		if id == "" {
+			continue
+		}
+		if _, dup := seenRuleIDs[id]; dup {
+			return nil, fmt.Errorf("duplicate rule id %q", id)
+		}
+		seenRuleIDs[id] = struct{}{}
+	}
+
 	rules := make([]CanonicalRule, 0, len(input.Rules))
 	ruleCounts := map[string]int{}
 	for i, rule := range input.Rules {
