@@ -167,18 +167,18 @@ func Verify(flowData []byte, policyData []byte, attestationsData []byte) (*Verif
 			IDs:        attestationIDs,
 			MerkleRoot: computeMerkleRoot(attestationIDs),
 		},
-		StartedAt:  started.Format(time.RFC3339),
+		StartedAt:   started.Format(time.RFC3339),
 		CompletedAt: nowFunc().Format(time.RFC3339),
-		Status:     status,
+		Status:      status,
 		Summary: Summary{
 			OutcomeCounts:  outcomeCounts,
 			SeverityCounts: severityCounts,
 		},
 		Findings: findings,
 		Signature: map[string]interface{}{
-			"alg":     "ed25519",
-			"key_id":  "platform:k1",
-			"value":   "",
+			"alg":    "ed25519",
+			"key_id": "platform:k1",
+			"value":  "",
 		},
 	}
 
@@ -255,7 +255,8 @@ func evaluateRule(r rule, events []event, atts []attestation) map[string]interfa
 	case "claim_match":
 		return evaluateClaimMatch(r, atts)
 	default:
-		return finding(r, "inconclusive", fmt.Sprintf("unknown rule category: %s", r.Category), nil)
+		return finding(r, "inconclusive", "inconclusive.unknown.unsupported_rule_category",
+			fmt.Sprintf("rule category not evaluated: %s", r.Category), nil, nil)
 	}
 }
 
@@ -277,12 +278,18 @@ func evaluateRequired(r rule, events []event) map[string]interface{} {
 	}
 
 	if count < minVal {
-		return finding(r, "fail", fmt.Sprintf("required action %q occurred %d time(s), minimum is %d", action, count, minVal), eventIDs(matched))
+		return finding(r, "fail", "fail.required.under_min",
+			fmt.Sprintf("required action %q occurred %d time(s), minimum is %d", action, count, minVal),
+			eventIDs(matched), nil)
 	}
 	if maxVal >= 0 && count > maxVal {
-		return finding(r, "fail", fmt.Sprintf("required action %q occurred %d time(s), maximum is %d", action, count, maxVal), eventIDs(matched))
+		return finding(r, "fail", "fail.required.over_max",
+			fmt.Sprintf("required action %q occurred %d time(s), maximum is %d", action, count, maxVal),
+			eventIDs(matched), nil)
 	}
-	return finding(r, "pass", fmt.Sprintf("required action %q occurred %d time(s)", action, count), eventIDs(matched))
+	return finding(r, "pass", "pass.required.satisfied",
+		fmt.Sprintf("required action %q occurred %d time(s)", action, count),
+		eventIDs(matched), nil)
 }
 
 func evaluateForbidden(r rule, events []event) map[string]interface{} {
@@ -303,18 +310,23 @@ func evaluateForbidden(r rule, events []event) map[string]interface{} {
 				for _, p := range predecessors {
 					pTime := parseEventTime(p.CompletedAt)
 					if !mTime.IsZero() && !pTime.IsZero() && mTime.After(pTime) {
-						return finding(r, "fail", fmt.Sprintf("forbidden action %q occurred after %q", action, after), []string{m.EventID})
+						return finding(r, "fail", "fail.forbidden.after_predecessor",
+							fmt.Sprintf("forbidden action %q occurred after %q", action, after),
+							[]string{m.EventID}, nil)
 					}
 				}
 			}
 		}
-		return finding(r, "pass", fmt.Sprintf("forbidden action %q did not occur after %q", action, after), nil)
+		return finding(r, "pass", "pass.forbidden.absent",
+			fmt.Sprintf("forbidden action %q did not occur after %q", action, after), nil, nil)
 	}
 
 	if withoutPredecessor != "" {
 		predecessors := filterEvents(events, withoutPredecessor, wherePredecessor)
 		if len(predecessors) == 0 && len(matched) > 0 {
-			return finding(r, "fail", fmt.Sprintf("forbidden action %q occurred without predecessor %q", action, withoutPredecessor), eventIDs(matched))
+			return finding(r, "fail", "fail.forbidden.without_predecessor",
+				fmt.Sprintf("forbidden action %q occurred without predecessor %q", action, withoutPredecessor),
+				eventIDs(matched), nil)
 		}
 		// Ensure each matched forbidden event has at least one predecessor BEFORE it.
 		var unmatched []event
@@ -333,15 +345,21 @@ func evaluateForbidden(r rule, events []event) map[string]interface{} {
 			}
 		}
 		if len(unmatched) > 0 {
-			return finding(r, "fail", fmt.Sprintf("forbidden action %q occurred without earlier predecessor %q", action, withoutPredecessor), eventIDs(unmatched))
+			return finding(r, "fail", "fail.forbidden.without_predecessor",
+				fmt.Sprintf("forbidden action %q occurred without earlier predecessor %q", action, withoutPredecessor),
+				eventIDs(unmatched), nil)
 		}
-		return finding(r, "pass", fmt.Sprintf("forbidden action %q constraint satisfied", action), nil)
+		return finding(r, "pass", "pass.forbidden.absent",
+			fmt.Sprintf("forbidden action %q constraint satisfied", action), nil, nil)
 	}
 
 	if len(matched) > 0 {
-		return finding(r, "fail", fmt.Sprintf("forbidden action %q occurred %d time(s)", action, len(matched)), eventIDs(matched))
+		return finding(r, "fail", "fail.forbidden.present",
+			fmt.Sprintf("forbidden action %q occurred %d time(s)", action, len(matched)),
+			eventIDs(matched), nil)
 	}
-	return finding(r, "pass", fmt.Sprintf("forbidden action %q did not occur", action), nil)
+	return finding(r, "pass", "pass.forbidden.absent",
+		fmt.Sprintf("forbidden action %q did not occur", action), nil, nil)
 }
 
 func evaluateOrdering(r rule, events []event) map[string]interface{} {
@@ -353,19 +371,25 @@ func evaluateOrdering(r rule, events []event) map[string]interface{} {
 	afterEvents := filterEvents(events, afterAction, nil)
 
 	if len(beforeEvents) == 0 {
-		return finding(r, "fail", fmt.Sprintf("ordering: before action %q not found", beforeAction), nil)
+		return finding(r, "inconclusive", "inconclusive.ordering.before_missing",
+			fmt.Sprintf("ordering: before action %q not found", beforeAction), nil, nil)
 	}
 	if len(afterEvents) == 0 {
-		return finding(r, "fail", fmt.Sprintf("ordering: after action %q not found", afterAction), nil)
+		return finding(r, "inconclusive", "inconclusive.ordering.after_missing",
+			fmt.Sprintf("ordering: after action %q not found", afterAction), nil, nil)
 	}
 
 	beforeTime := earliestCompletion(beforeEvents)
 	afterTime := earliestCompletion(afterEvents)
 
 	if !beforeTime.IsZero() && !afterTime.IsZero() && beforeTime.Before(afterTime) {
-		return finding(r, "pass", fmt.Sprintf("ordering: %q completed before %q", beforeAction, afterAction), eventIDs(append(beforeEvents, afterEvents...)))
+		return finding(r, "pass", "pass.ordering.satisfied",
+			fmt.Sprintf("ordering: %q completed before %q", beforeAction, afterAction),
+			eventIDs(append(beforeEvents, afterEvents...)), nil)
 	}
-	return finding(r, "fail", fmt.Sprintf("ordering: %q did not complete before %q", beforeAction, afterAction), eventIDs(append(beforeEvents, afterEvents...)))
+	return finding(r, "fail", "fail.ordering.out_of_order",
+		fmt.Sprintf("ordering: %q did not complete before %q", beforeAction, afterAction),
+		eventIDs(append(beforeEvents, afterEvents...)), nil)
 }
 
 func evaluateCardinality(r rule, events []event) map[string]interface{} {
@@ -379,9 +403,13 @@ func evaluateCardinality(r rule, events []event) map[string]interface{} {
 	if exactly, ok := spec["exactly"]; ok {
 		exactVal := intFromInterface(exactly)
 		if count != exactVal {
-			return finding(r, "fail", fmt.Sprintf("cardinality: action %q occurred %d time(s), expected exactly %d", action, count, exactVal), eventIDs(matched))
+			return finding(r, "fail", "fail.cardinality.not_exact",
+				fmt.Sprintf("cardinality: action %q occurred %d time(s), expected exactly %d", action, count, exactVal),
+				eventIDs(matched), nil)
 		}
-		return finding(r, "pass", fmt.Sprintf("cardinality: action %q occurred exactly %d time(s)", action, count), eventIDs(matched))
+		return finding(r, "pass", "pass.cardinality.satisfied",
+			fmt.Sprintf("cardinality: action %q occurred exactly %d time(s)", action, count),
+			eventIDs(matched), nil)
 	}
 
 	minVal := 0
@@ -394,12 +422,18 @@ func evaluateCardinality(r rule, events []event) map[string]interface{} {
 	}
 
 	if count < minVal {
-		return finding(r, "fail", fmt.Sprintf("cardinality: action %q occurred %d time(s), minimum is %d", action, count, minVal), eventIDs(matched))
+		return finding(r, "fail", "fail.cardinality.under_min",
+			fmt.Sprintf("cardinality: action %q occurred %d time(s), minimum is %d", action, count, minVal),
+			eventIDs(matched), nil)
 	}
 	if maxVal >= 0 && count > maxVal {
-		return finding(r, "fail", fmt.Sprintf("cardinality: action %q occurred %d time(s), maximum is %d", action, count, maxVal), eventIDs(matched))
+		return finding(r, "fail", "fail.cardinality.over_max",
+			fmt.Sprintf("cardinality: action %q occurred %d time(s), maximum is %d", action, count, maxVal),
+			eventIDs(matched), nil)
 	}
-	return finding(r, "pass", fmt.Sprintf("cardinality: action %q occurred %d time(s)", action, count), eventIDs(matched))
+	return finding(r, "pass", "pass.cardinality.satisfied",
+		fmt.Sprintf("cardinality: action %q occurred %d time(s)", action, count),
+		eventIDs(matched), nil)
 }
 
 func evaluateTemporal(r rule, events []event) map[string]interface{} {
@@ -415,32 +449,39 @@ func evaluateTemporal(r rule, events []event) map[string]interface{} {
 	toEvents := filterEvents(events, toAction, nil)
 
 	if len(fromEvents) == 0 {
-		return finding(r, "fail", fmt.Sprintf("temporal: from action %q not found", fromAction), nil)
+		return finding(r, "inconclusive", "inconclusive.temporal.missing_anchor",
+			fmt.Sprintf("temporal: from action %q not found", fromAction), nil, nil)
 	}
 	if len(toEvents) == 0 {
-		return finding(r, "fail", fmt.Sprintf("temporal: to action %q not found", toAction), nil)
+		return finding(r, "inconclusive", "inconclusive.temporal.missing_anchor",
+			fmt.Sprintf("temporal: to action %q not found", toAction), nil, nil)
 	}
 
 	fromTime := earliestCompletion(fromEvents)
 	toTime := earliestCompletion(toEvents)
 
 	if fromTime.IsZero() || toTime.IsZero() {
-		return finding(r, "inconclusive", "temporal: unable to determine timestamps", nil)
+		return finding(r, "inconclusive", "inconclusive.temporal.missing_anchor",
+			"temporal: unable to determine timestamps", nil, nil)
 	}
 
 	duration := toTime.Sub(fromTime)
 	if duration < 0 {
-		return finding(r, "fail", "temporal: 'to' event occurs before 'from' event", nil)
+		return finding(r, "fail", "fail.temporal.negative_interval",
+			"temporal: 'to' event occurs before 'from' event", nil, nil)
 	}
 	maxDuration, err := parseISODuration(maxDur)
 	if err != nil {
-		return finding(r, "inconclusive", fmt.Sprintf("temporal: invalid max duration %q", maxDur), nil)
+		return finding(r, "inconclusive", "inconclusive.temporal.duration_invalid",
+			fmt.Sprintf("temporal: invalid max duration %q", maxDur), nil, nil)
 	}
 
 	if duration <= maxDuration {
-		return finding(r, "pass", fmt.Sprintf("temporal: duration %v within max %v", duration, maxDuration), nil)
+		return finding(r, "pass", "pass.temporal.within_window",
+			fmt.Sprintf("temporal: duration %v within max %v", duration, maxDuration), nil, nil)
 	}
-	return finding(r, "fail", fmt.Sprintf("temporal: duration %v exceeds max %v", duration, maxDuration), nil)
+	return finding(r, "fail", "fail.temporal.exceeded_max",
+		fmt.Sprintf("temporal: duration %v exceeds max %v", duration, maxDuration), nil, nil)
 }
 
 func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
@@ -451,7 +492,8 @@ func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
 	threshold, _ := spec["threshold"].(map[string]interface{})
 
 	if claim == "" {
-		return finding(r, "inconclusive", "consensus: missing claim", nil)
+		return finding(r, "inconclusive", "inconclusive.consensus.claim_missing",
+			"consensus: missing claim", nil, nil)
 	}
 
 	sources := make([]map[string]interface{}, 0, len(sourcesRaw))
@@ -486,7 +528,8 @@ func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
 	}
 
 	if len(matchedAtts) == 0 {
-		return finding(r, "fail", fmt.Sprintf("consensus: no attestations found for claim %q", claim), nil)
+		return finding(r, "fail", "fail.consensus.insufficient",
+			fmt.Sprintf("consensus: no attestations found for claim %q", claim), nil, nil)
 	}
 
 	// Count agreements by grouping matched attestations by ClaimValue.
@@ -527,7 +570,8 @@ func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
 
 	// Validate threshold contains exactly one supported operator.
 	if threshold == nil || len(threshold) == 0 {
-		return finding(r, "fail", "consensus: threshold is required", nil)
+		return finding(r, "fail", "fail.consensus.threshold_unmet",
+			"consensus: threshold is required", nil, nil)
 	}
 	supported := 0
 	for k := range threshold {
@@ -535,11 +579,13 @@ func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
 		case "unanimous", "majority", "agree_at_least":
 			supported++
 		default:
-			return finding(r, "fail", fmt.Sprintf("consensus: unknown threshold key %q", k), nil)
+			return finding(r, "fail", "fail.consensus.insufficient",
+				fmt.Sprintf("consensus: unknown threshold key %q", k), nil, nil)
 		}
 	}
 	if supported != 1 {
-		return finding(r, "fail", fmt.Sprintf("consensus: threshold must contain exactly one supported operator, got %d", supported), nil)
+		return finding(r, "fail", "fail.consensus.insufficient",
+			fmt.Sprintf("consensus: threshold must contain exactly one supported operator, got %d", supported), nil, nil)
 	}
 
 	// Evaluate threshold
@@ -550,7 +596,9 @@ func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
 		if unanimous {
 			thresholdMet = agreeCount == len(matchedAtts) && len(matchedAtts) > 0
 			if !thresholdMet {
-				return finding(r, "fail", fmt.Sprintf("consensus.disagreement: unanimous required, %d/%d agree", agreeCount, len(matchedAtts)), evidenceIDs)
+				return finding(r, "fail", "fail.consensus.disagreement",
+					fmt.Sprintf("consensus.disagreement: unanimous required, %d/%d agree", agreeCount, len(matchedAtts)),
+					nil, evidenceIDs)
 			}
 		}
 	} else if majority, ok := threshold["majority"].(bool); ok {
@@ -558,29 +606,38 @@ func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
 		if majority {
 			thresholdMet = agreeCount > len(matchedAtts)/2
 			if !thresholdMet {
-				return finding(r, "fail", fmt.Sprintf("consensus.disagreement: majority required, %d/%d agree", agreeCount, len(matchedAtts)), evidenceIDs)
+				return finding(r, "fail", "fail.consensus.disagreement",
+					fmt.Sprintf("consensus.disagreement: majority required, %d/%d agree", agreeCount, len(matchedAtts)),
+					nil, evidenceIDs)
 			}
 		}
 	} else if agreeAtLeast, ok := threshold["agree_at_least"]; ok {
 		evaluated = true
 		min, err := validateAgreeAtLeast(agreeAtLeast)
 		if err != nil {
-			return finding(r, "fail", fmt.Sprintf("consensus: invalid agree_at_least: %v", err), nil)
+			return finding(r, "fail", "fail.consensus.insufficient",
+				fmt.Sprintf("consensus: invalid agree_at_least: %v", err), nil, nil)
 		}
 		thresholdMet = agreeCount >= min
 		if !thresholdMet {
-			return finding(r, "fail", fmt.Sprintf("consensus.disagreement: agree_at_least %d required, %d agree", min, agreeCount), evidenceIDs)
+			return finding(r, "fail", "fail.consensus.disagreement",
+				fmt.Sprintf("consensus.disagreement: agree_at_least %d required, %d agree", min, agreeCount),
+				nil, evidenceIDs)
 		}
 	}
 
 	if !evaluated {
-		return finding(r, "fail", fmt.Sprintf("consensus: invalid or unevaluated threshold (keys: %+v)", threshold), nil)
+		return finding(r, "fail", "fail.consensus.insufficient",
+			fmt.Sprintf("consensus: invalid or unevaluated threshold (keys: %+v)", threshold), nil, nil)
 	}
 	if !thresholdMet {
-		return finding(r, "fail", "consensus: threshold value did not activate the rule", nil)
+		return finding(r, "fail", "fail.consensus.threshold_unmet",
+			"consensus: threshold value did not activate the rule", nil, nil)
 	}
 
-	return finding(r, "pass", fmt.Sprintf("consensus: %d/%d attestations agree on claim %q", agreeCount, len(matchedAtts), claim), evidenceIDs)
+	return finding(r, "pass", "pass.consensus.threshold_met",
+		fmt.Sprintf("consensus: %d/%d attestations agree on claim %q", agreeCount, len(matchedAtts), claim),
+		nil, evidenceIDs)
 }
 
 func evaluateValueBound(r rule, atts []attestation) map[string]interface{} {
@@ -590,23 +647,27 @@ func evaluateValueBound(r rule, atts []attestation) map[string]interface{} {
 	sourceID, _ := spec["source_id"].(string)
 
 	if claim == "" || operator == "" {
-		return finding(r, "inconclusive", "value_bound: claim and operator are required", nil)
+		return finding(r, "inconclusive", "inconclusive.value_bound.claim_missing",
+			"value_bound: claim and operator are required", nil, nil)
 	}
 
 	// Validate operator is supported.
 	if !isValidValueBoundOperator(operator) {
-		return finding(r, "inconclusive", fmt.Sprintf("value_bound: unsupported operator %q", operator), nil)
+		return finding(r, "inconclusive", "inconclusive.value_bound.operator_unsupported",
+			fmt.Sprintf("value_bound: unsupported operator %q", operator), nil, nil)
 	}
 
 	// Validate bound value exists and is numeric.
 	boundValue, ok := toFloat64(spec["value"])
 	if !ok {
-		return finding(r, "inconclusive", "value_bound: spec value must be numeric", nil)
+		return finding(r, "inconclusive", "inconclusive.value_bound.bound_invalid",
+			"value_bound: spec value must be numeric", nil, nil)
 	}
 
 	matched := filterAttestations(atts, claim, sourceID)
 	if len(matched) == 0 {
-		return finding(r, "fail", fmt.Sprintf("value_bound: no attestations found for claim %q", claim), nil)
+		return finding(r, "inconclusive", "inconclusive.value_bound.claim_missing",
+			fmt.Sprintf("value_bound: no attestations found for claim %q", claim), nil, nil)
 	}
 
 	var evidence []string
@@ -624,9 +685,13 @@ func evaluateValueBound(r rule, atts []attestation) map[string]interface{} {
 	}
 
 	if failCount > 0 {
-		return finding(r, "fail", fmt.Sprintf("value_bound: %d/%d attestations violate %s %v for claim %q", failCount, len(matched), operator, boundValue, claim), evidence)
+		return finding(r, "fail", "fail.value_bound.out_of_range",
+			fmt.Sprintf("value_bound: %d/%d attestations violate %s %v for claim %q", failCount, len(matched), operator, boundValue, claim),
+			nil, evidence)
 	}
-	return finding(r, "pass", fmt.Sprintf("value_bound: all %d attestations satisfy %s %v for claim %q", len(matched), operator, boundValue, claim), evidence)
+	return finding(r, "pass", "pass.value_bound.satisfied",
+		fmt.Sprintf("value_bound: all %d attestations satisfy %s %v for claim %q", len(matched), operator, boundValue, claim),
+		nil, evidence)
 }
 
 func isValidValueBoundOperator(op string) bool {
@@ -644,15 +709,18 @@ func evaluateClaimMatch(r rule, atts []attestation) map[string]interface{} {
 	sourceID, _ := spec["source_id"].(string)
 
 	if claim == "" {
-		return finding(r, "inconclusive", "claim_match: claim is required", nil)
+		return finding(r, "inconclusive", "inconclusive.claim_match.claim_missing",
+			"claim_match: claim is required", nil, nil)
 	}
 	if expectedValue == nil {
-		return finding(r, "inconclusive", "claim_match: expected_value is required", nil)
+		return finding(r, "inconclusive", "inconclusive.claim_match.expected_missing",
+			"claim_match: expected_value is required", nil, nil)
 	}
 
 	matched := filterAttestations(atts, claim, sourceID)
 	if len(matched) == 0 {
-		return finding(r, "fail", fmt.Sprintf("claim_match: no attestations found for claim %q", claim), nil)
+		return finding(r, "inconclusive", "inconclusive.claim_match.claim_missing",
+			fmt.Sprintf("claim_match: no attestations found for claim %q", claim), nil, nil)
 	}
 
 	var evidence []string
@@ -665,9 +733,13 @@ func evaluateClaimMatch(r rule, atts []attestation) map[string]interface{} {
 	}
 
 	if failCount > 0 {
-		return finding(r, "fail", fmt.Sprintf("claim_match: %d/%d attestations do not match expected value for claim %q", failCount, len(matched), claim), evidence)
+		return finding(r, "fail", "fail.claim_match.mismatch",
+			fmt.Sprintf("claim_match: %d/%d attestations do not match expected value for claim %q", failCount, len(matched), claim),
+			nil, evidence)
 	}
-	return finding(r, "pass", fmt.Sprintf("claim_match: all %d attestations match expected value for claim %q", len(matched), claim), evidence)
+	return finding(r, "pass", "pass.claim_match.matched",
+		fmt.Sprintf("claim_match: all %d attestations match expected value for claim %q", len(matched), claim),
+		nil, evidence)
 }
 
 func filterAttestations(atts []attestation, claim, sourceID string) []attestation {
@@ -714,20 +786,42 @@ func compareValueBound(value float64, operator string, bound float64) bool {
 	return false
 }
 
-// Helpers
-
-func finding(r rule, outcome, reason string, evidence []string) map[string]interface{} {
-	if evidence == nil {
-		evidence = []string{}
+// finding builds a Finding-shaped map. reasonCode must be a vocabulary code
+// from intentproof-spec semantics/reasons.json; humanSummary carries optional
+// evaluator detail for operators (not part of the stable reason code).
+func finding(
+	r rule,
+	outcome string,
+	reasonCode string,
+	humanSummary string,
+	evidenceEventIDs []string,
+	evidenceAttestationIDs []string,
+) map[string]interface{} {
+	if evidenceEventIDs == nil {
+		evidenceEventIDs = []string{}
 	}
-	return map[string]interface{}{
+	if evidenceAttestationIDs == nil {
+		evidenceAttestationIDs = []string{}
+	}
+	ruleCategory := r.Category
+	if reasonCode == "inconclusive.unknown.unsupported_rule_category" {
+		ruleCategory = "unknown"
+	}
+	m := map[string]interface{}{
 		"rule_id":            r.ID,
-		"rule_category":      r.Category,
+		"rule_category":      ruleCategory,
 		"outcome":            outcome,
 		"severity":           r.Severity,
-		"reason":             reason,
-		"evidence_event_ids": evidence,
+		"reason":             reasonCode,
+		"evidence_event_ids": evidenceEventIDs,
 	}
+	if len(evidenceAttestationIDs) > 0 {
+		m["evidence_attestation_ids"] = evidenceAttestationIDs
+	}
+	if humanSummary != "" {
+		m["human_summary"] = humanSummary
+	}
+	return m
 }
 
 func filterEvents(events []event, action string, where map[string]interface{}) []event {

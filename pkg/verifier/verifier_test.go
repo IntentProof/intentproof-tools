@@ -30,7 +30,7 @@ func TestCanonicalRunJSON_Hash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CanonicalRunJSON: %v", err)
 	}
-	wantHash := "fb17414650d0db5a477dce5b20ded8ebc6017f6838739cae434ca27858eefdb5"
+	wantHash := "264f47770c6fd5b4040db75239d1abe6dbfed2e470cbe264d647b9b4d9ea1793"
 	gotHash := hex.EncodeToString(sha256Sum(canonical))
 	if gotHash != wantHash {
 		t.Fatalf("canonical run hash mismatch: want %s, got %s", wantHash, gotHash)
@@ -238,6 +238,46 @@ func TestVerifyTemporalRuleFail(t *testing.T) {
 	}
 }
 
+func TestVerifyTemporalInvalidMaxDurationInconclusive(t *testing.T) {
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[
+		{"event_id":"e1","action":"a","status":"ok","started_at":"2026-05-12T00:00:00Z","completed_at":"2026-05-12T00:00:01Z"},
+		{"event_id":"e2","action":"b","status":"ok","started_at":"2026-05-12T00:00:02Z","completed_at":"2026-05-12T00:00:03Z"}
+	]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"temporal","severity":"medium","spec":{"from":{"action":"a"},"to":{"action":"b"},"max":"P10M"}}]}`)
+
+	run, err := Verify(flow, policy, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if run.Status != "inconclusive" {
+		t.Fatalf("expected inconclusive, got %s", run.Status)
+	}
+	reason := run.Findings[0]["reason"].(string)
+	if reason != "inconclusive.temporal.duration_invalid" {
+		t.Fatalf("reason: want inconclusive.temporal.duration_invalid, got %s", reason)
+	}
+}
+
+func TestVerifyNonDSLRuleCategoryUsesUnknownReason(t *testing.T) {
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"custom_check","severity":"medium","spec":{}}]}`)
+
+	run, err := Verify(flow, policy, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if run.Status != "inconclusive" {
+		t.Fatalf("expected inconclusive, got %s", run.Status)
+	}
+	reason := run.Findings[0]["reason"].(string)
+	if reason != "inconclusive.unknown.unsupported_rule_category" {
+		t.Fatalf("reason: want inconclusive.unknown.unsupported_rule_category, got %s", reason)
+	}
+	if run.Findings[0]["rule_category"].(string) != "unknown" {
+		t.Fatalf("rule_category: want unknown, got %v", run.Findings[0]["rule_category"])
+	}
+}
+
 func TestVerifyConsensusUnanimousPass(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
 	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"consensus","severity":"critical","spec":{"claim":"refund.ok","sources":[{"kind":"external","source_id":"stripe"}],"threshold":{"unanimous":true}}}]}`)
@@ -265,8 +305,8 @@ func TestVerifyConsensusDisagreement(t *testing.T) {
 		t.Fatalf("expected fail, got %s", run.Status)
 	}
 	reason := run.Findings[0]["reason"].(string)
-	if !strings.Contains(reason, "consensus.disagreement") {
-		t.Fatalf("expected consensus.disagreement reason, got %s", reason)
+	if reason != "fail.consensus.disagreement" {
+		t.Fatalf("expected fail.consensus.disagreement reason, got %s", reason)
 	}
 }
 
@@ -496,8 +536,12 @@ func TestVerifyValueBoundNonNumericClaimValue(t *testing.T) {
 		t.Fatalf("expected fail, got %s", run.Status)
 	}
 	reason := run.Findings[0]["reason"].(string)
-	if !strings.Contains(reason, "1/1 attestations violate") {
-		t.Fatalf("expected violation reason, got %s", reason)
+	if reason != "fail.value_bound.out_of_range" {
+		t.Fatalf("expected fail.value_bound.out_of_range, got %s", reason)
+	}
+	summary := run.Findings[0]["human_summary"].(string)
+	if !strings.Contains(summary, "1/1 attestations violate") {
+		t.Fatalf("expected violation detail in human_summary, got %s", summary)
 	}
 }
 
@@ -516,7 +560,7 @@ func TestVerifyValueBoundWithSourceIDFilter(t *testing.T) {
 		t.Fatalf("expected pass, got %s", run.Status)
 	}
 	// Only a1 should be in evidence because source_id filters to model-a.
-	ev := run.Findings[0]["evidence_event_ids"].([]string)
+	ev := run.Findings[0]["evidence_attestation_ids"].([]string)
 	if len(ev) != 1 || ev[0] != "a1" {
 		t.Fatalf("expected evidence [a1], got %v", ev)
 	}
@@ -587,7 +631,7 @@ func TestVerifyClaimMatchWithSourceIDFilter(t *testing.T) {
 	if run.Status != "pass" {
 		t.Fatalf("expected pass, got %s", run.Status)
 	}
-	ev := run.Findings[0]["evidence_event_ids"].([]string)
+	ev := run.Findings[0]["evidence_attestation_ids"].([]string)
 	if len(ev) != 1 || ev[0] != "a1" {
 		t.Fatalf("expected evidence [a1], got %v", ev)
 	}
