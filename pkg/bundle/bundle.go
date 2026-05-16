@@ -578,10 +578,26 @@ func canonicalSignedMap(doc map[string]interface{}, excludedFields []string) ([]
 }
 
 func decodeSignatureValue(value string) ([]byte, error) {
+	value = strings.TrimSpace(value)
+	if isEd25519HexSignature(value) {
+		return hex.DecodeString(value)
+	}
 	if sig, err := base64.StdEncoding.DecodeString(value); err == nil {
 		return sig, nil
 	}
 	return hex.DecodeString(value)
+}
+
+func isEd25519HexSignature(value string) bool {
+	if len(value) != ed25519.SignatureSize*2 {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 func parseEd25519PublicKey(raw []byte) (ed25519.PublicKey, error) {

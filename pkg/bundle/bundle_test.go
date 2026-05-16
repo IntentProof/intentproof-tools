@@ -375,6 +375,49 @@ func TestVerifyEmbeddedObjectSignatureInvalid(t *testing.T) {
 	}
 }
 
+func TestVerifyEmbeddedHexObjectSignature(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	event := map[string]interface{}{
+		"event_id": "e1",
+		"action":   "pay",
+		"status":   "ok",
+	}
+	payload, err := canonicalSignedMap(event, []string{"signature"})
+	if err != nil {
+		t.Fatalf("canonical signed map: %v", err)
+	}
+	event["signature"] = map[string]interface{}{
+		"alg":    "ed25519",
+		"key_id": "object:k1",
+		"value":  hex.EncodeToString(ed25519.Sign(priv, sha256Sum(payload))),
+	}
+
+	opts := buildTestBundleOpts(t, nil)
+	opts.EventsJSONL = jsonlBytes([]map[string]interface{}{event})
+	opts.PublicKeys = map[string][]byte{"object:k1": pub}
+
+	var buf bytes.Buffer
+	if err := Create(&buf, opts); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	res, err := Verify(&buf, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if res.Status != "pass" {
+		t.Fatalf("expected pass, got status=%s reason=%s findings=%v",
+			res.Status, res.Reason, res.Findings)
+	}
+	if !hasFinding(res.Findings, "event.signature_valid") {
+		t.Fatalf("expected event.signature_valid, findings=%v", res.Findings)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
