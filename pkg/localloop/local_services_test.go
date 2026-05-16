@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
@@ -154,6 +156,44 @@ func TestLocalPublicBaseURL(t *testing.T) {
 	}
 	if u := LocalPublicBaseURL(""); u != "http://localhost:9787" {
 		t.Fatalf("empty default got %q", u)
+	}
+}
+
+func TestLocalDashboardHandler_healthzAndHome(t *testing.T) {
+	db, err := OpenDB(filepath.Join(t.TempDir(), "dash.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	links := LocalDashboardLinks{
+		IngestURL:    "http://localhost:19777",
+		VerifierURL:  "http://localhost:19788",
+		DashboardURL: "http://localhost:19799",
+	}
+	h := LocalDashboardHandler(db, links)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("healthz: %d %q", rec.Code, rec.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("home: %d", rec2.Code)
+	}
+	body := rec2.Body.String()
+	if !strings.Contains(body, "Endpoints") {
+		t.Fatalf("expected endpoints panel in HTML")
+	}
+	if !strings.Contains(body, "http://localhost:19777/v1/events") {
+		t.Fatalf("expected ingest URL in HTML")
+	}
+	if !strings.Contains(body, "Flows") {
+		t.Fatalf("expected flows section")
 	}
 }
 

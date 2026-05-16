@@ -56,6 +56,12 @@ func startLocalServer() error {
 	verifierURL := localloop.LocalPublicBaseURL(verifierAddr)
 	dashboardURL := localloop.LocalPublicBaseURL(dashboardAddr)
 
+	dashLinks := localloop.LocalDashboardLinks{
+		IngestURL:    ingestURL,
+		VerifierURL:  verifierURL,
+		DashboardURL: dashboardURL,
+	}
+
 	ingestSrv := localloop.NewIngestServer(ingestAddr, db, nats)
 	flowBuilder := localloop.NewFlowBuilder(db, nats)
 
@@ -74,7 +80,10 @@ func startLocalServer() error {
 	fmt.Println("Dashboard:      ", dashboardURL+"/")
 	fmt.Println("NATS endpoint:  ", nats.URL())
 	fmt.Println("\nWhen you run code with INTENTPROOF_INGEST_URL=" + ingestURL + "/v1/events,")
-	fmt.Println("open", dashboardURL, "to inspect flows. Ctrl-C to stop.")
+	fmt.Println("use the dashboard to inspect flows. Ctrl-C to stop.")
+	if localloop.LocalDashboardAutoOpenEnabled() {
+		fmt.Println("Opening dashboard in your default browser (set " + localloop.EnvLocalOpenBrowser + "=0 to skip).")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -95,10 +104,12 @@ func startLocalServer() error {
 	}()
 
 	go func() {
-		if err := http.ListenAndServe(dashboardAddr, localloop.LocalDashboardHandler(db)); err != nil {
+		if err := http.ListenAndServe(dashboardAddr, localloop.LocalDashboardHandler(db, dashLinks)); err != nil {
 			errCh <- fmt.Errorf("dashboard server: %w", err)
 		}
 	}()
+
+	localloop.MaybeOpenLocalDashboard(dashboardURL)
 
 	// Start flow builder in background.
 	go func() {
