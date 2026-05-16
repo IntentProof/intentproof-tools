@@ -2,10 +2,16 @@ package localloop
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/intentproof/intentproof-tools/pkg/bundle"
 )
 
 func TestLocalVerifierHandlerVerifyRun(t *testing.T) {
@@ -36,6 +42,112 @@ func TestLocalVerifierHandlerHealthz(t *testing.T) {
 	}
 }
 
+func TestLocalVerifierHandlerVerifyBundle_unsignedPass(t *testing.T) {
+	t.Setenv(EnvLocalBundleVerifyPubkey, "")
+	h := LocalVerifierHandler()
+	tarBody := mustTestProofTar(t, nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/bundle", bytes.NewReader(tarBody))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	var got bundle.VerifyResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "pass" {
+		t.Fatalf("expected pass, got %#v", got)
+	}
+}
+
+func TestLocalVerifierHandlerVerifyBundle_signedWithEnvPubkey(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub := priv.Public().(ed25519.PublicKey)
+	t.Setenv(EnvLocalBundleVerifyPubkey, hex.EncodeToString(pub))
+
+	h := LocalVerifierHandler()
+	tarBody := mustTestProofTar(t, priv)
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/bundle", bytes.NewReader(tarBody))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	var got bundle.VerifyResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "pass" {
+		t.Fatalf("expected pass, got %#v", got)
+	}
+}
+
+func TestLocalVerifierHandlerVerifyBundle_signedWrongEnvPubkey(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, wrongPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongPub := wrongPriv.Public().(ed25519.PublicKey)
+	t.Setenv(EnvLocalBundleVerifyPubkey, hex.EncodeToString(wrongPub))
+
+	h := LocalVerifierHandler()
+	tarBody := mustTestProofTar(t, priv)
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/bundle", bytes.NewReader(tarBody))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	var got bundle.VerifyResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "fail" || got.Reason != "bundle.signature_invalid" {
+		t.Fatalf("expected signature fail, got %#v", got)
+	}
+}
+
+func TestLocalVerifierHandlerVerifyBundle_badPubkeyEnv(t *testing.T) {
+	t.Setenv(EnvLocalBundleVerifyPubkey, "not-hex")
+	h := LocalVerifierHandler()
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/bundle", bytes.NewReader([]byte("x")))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestLocalVerifierHandlerVerifyBundle_methodNotAllowed(t *testing.T) {
+	t.Setenv(EnvLocalBundleVerifyPubkey, "")
+	h := LocalVerifierHandler()
+	req := httptest.NewRequest(http.MethodGet, "/v1/verify/bundle", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("got %d", rec.Code)
+	}
+}
+
+func TestLocalVerifierHandlerVerifyBundle_emptyBody(t *testing.T) {
+	t.Setenv(EnvLocalBundleVerifyPubkey, "")
+	h := LocalVerifierHandler()
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/bundle", bytes.NewReader(nil))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestLocalPublicBaseURL(t *testing.T) {
 	if u := LocalPublicBaseURL(":9787"); u != "http://localhost:9787" {
 		t.Fatalf("got %q", u)
@@ -43,4 +155,53 @@ func TestLocalPublicBaseURL(t *testing.T) {
 	if u := LocalPublicBaseURL(""); u != "http://localhost:9787" {
 		t.Fatalf("empty default got %q", u)
 	}
+}
+
+func mustTestProofTar(t *testing.T, signerPriv ed25519.PrivateKey) []byte {
+	t.Helper()
+	flowJSON, _ := json.Marshal(map[string]interface{}{
+		"flow_id":   "f1",
+		"tenant_id": "tnt",
+		"events":    []string{"e1", "e2"},
+	})
+	eventsJSONL := []byte(`{"event_id":"e1","action":"pay","status":"ok"}` + "\n" +
+		`{"event_id":"e2","action":"refund","status":"ok"}`)
+	attsJSONL := []byte(`{"attestation_id":"a1","claim":"refund.ok","claim_value":true}`)
+	policyJSON, _ := json.Marshal(map[string]interface{}{
+		"policy_id": "p1",
+		"rules":     []interface{}{},
+	})
+	runJSON, _ := json.Marshal(map[string]interface{}{
+		"run_id":   "run_f1",
+		"flow_id":  "f1",
+		"status":   "pass",
+		"findings": []interface{}{},
+	})
+
+	opts := bundle.CreateOptions{
+		BundleID:          "bundle_f1",
+		FlowID:            "f1",
+		TenantID:          "tnt",
+		FlowJSON:          flowJSON,
+		EventsJSONL:       eventsJSONL,
+		AttestationsJSONL: attsJSONL,
+		PolicyJSON:        policyJSON,
+		RunJSON:           runJSON,
+	}
+	if signerPriv != nil {
+		opts.Signer = func(data []byte) (*bundle.SignatureEnvelope, error) {
+			sum := sha256.Sum256(data)
+			sig := ed25519.Sign(signerPriv, sum[:])
+			return &bundle.SignatureEnvelope{
+				Alg:   "ed25519",
+				KeyID: "test",
+				Value: hex.EncodeToString(sig),
+			}, nil
+		}
+	}
+	var buf bytes.Buffer
+	if err := bundle.Create(&buf, opts); err != nil {
+		t.Fatalf("bundle.Create: %v", err)
+	}
+	return buf.Bytes()
 }
