@@ -37,7 +37,7 @@ type Options struct {
 	Stderr io.Writer
 	// HomeDir is the synthetic HOME layout root (.intentproof/local lives here).
 	HomeDir string
-	// WorkDir is where demo-refund.proof.tar is written.
+	// WorkDir is where demo-refund.proof.tar.zst is written.
 	WorkDir     string
 	OpenBrowser bool
 }
@@ -243,7 +243,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return fmt.Errorf("policy indent: %w", err)
 	}
 
-	bundlePath := filepath.Join(opt.WorkDir, "demo-refund.proof.tar")
+	bundlePath := filepath.Join(opt.WorkDir, "demo-refund.proof.tar.zst")
 	bf, err := os.Create(bundlePath)
 	if err != nil {
 		return fmt.Errorf("create bundle: %w", err)

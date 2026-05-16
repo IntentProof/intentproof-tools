@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/intentproof/intentproof-tools/pkg/canon"
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestBundleRoundTrip(t *testing.T) {
@@ -26,6 +27,9 @@ func TestBundleRoundTrip(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Create(&buf, opts); err != nil {
 		t.Fatalf("Create: %v", err)
+	}
+	if !isZstdFrame(buf.Bytes()) {
+		t.Fatalf("expected Create to emit zstd-compressed tar")
 	}
 
 	res, err := Verify(&buf, pub)
@@ -55,12 +59,12 @@ func TestBundleRoundTrip(t *testing.T) {
 
 func TestCanonicalManifestJSON_Hash(t *testing.T) {
 	m := &Manifest{
-		Schema:    "intentproof.bundle.manifest.v1",
-		BundleID:  "bundle_f1",
-		CreatedAt: "2026-05-12T00:00:00Z",
-		FlowID:    "f1",
-		TenantID:  "tnt",
-		Files:     []ManifestEntry{{Path: "flow.json", SHA: "sha256:abc"}},
+		Schema:      "intentproof.bundle.manifest.v1",
+		BundleID:    "bundle_f1",
+		CreatedAt:   "2026-05-12T00:00:00Z",
+		FlowID:      "f1",
+		TenantID:    "tnt",
+		Files:       []ManifestEntry{{Path: "flow.json", SHA: "sha256:abc"}},
 		EventMerkle: "sha256:def",
 		AttMerkle:   "sha256:ghi",
 	}
@@ -76,12 +80,12 @@ func TestCanonicalManifestJSON_Hash(t *testing.T) {
 
 	// Verify canon.Marshal produces identical bytes for the same input.
 	m2 := &Manifest{
-		Schema:    "intentproof.bundle.manifest.v1",
-		BundleID:  "bundle_f1",
-		CreatedAt: "2026-05-12T00:00:00Z",
-		FlowID:    "f1",
-		TenantID:  "tnt",
-		Files:     []ManifestEntry{{Path: "flow.json", SHA: "sha256:abc"}},
+		Schema:      "intentproof.bundle.manifest.v1",
+		BundleID:    "bundle_f1",
+		CreatedAt:   "2026-05-12T00:00:00Z",
+		FlowID:      "f1",
+		TenantID:    "tnt",
+		Files:       []ManifestEntry{{Path: "flow.json", SHA: "sha256:abc"}},
 		EventMerkle: "sha256:def",
 		AttMerkle:   "sha256:ghi",
 	}
@@ -130,10 +134,14 @@ func TestVerifyTamperedFile(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	// Tamper: replace "pass" with "FAIL" in the tar bytes.
-	tarBytes := bytes.Replace(buf.Bytes(), []byte(`"status":"pass"`), []byte(`"status":"FAIL"`), 1)
+	b := mustExtractBundle(t, &buf)
+	b.RawFiles["run.json"] = bytes.Replace(b.RawFiles["run.json"], []byte(`"status":"pass"`), []byte(`"status":"FAIL"`), 1)
+	var tampered bytes.Buffer
+	if err := writeBundle(&tampered, b); err != nil {
+		t.Fatalf("writeBundle: %v", err)
+	}
 
-	res, err := Verify(bytes.NewReader(tarBytes), pub)
+	res, err := Verify(&tampered, pub)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -223,6 +231,36 @@ func TestVerifyUnsignedBundle(t *testing.T) {
 	}
 	if res.Status != "pass" {
 		t.Fatalf("expected pass for unsigned bundle, got %s: %s", res.Status, res.Reason)
+	}
+}
+
+func TestVerifyPlainTarBackCompat(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	pub := priv.Public().(ed25519.PublicKey)
+
+	var compressed bytes.Buffer
+	if err := Create(&compressed, buildTestBundleOpts(t, priv)); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	b := mustExtractBundle(t, &compressed)
+
+	var plain bytes.Buffer
+	if err := writeBundlePlainTar(&plain, b); err != nil {
+		t.Fatalf("writeBundlePlainTar: %v", err)
+	}
+	if isZstdFrame(plain.Bytes()) {
+		t.Fatalf("expected plain tar fixture, got zstd")
+	}
+
+	res, err := Verify(&plain, pub)
+	if err != nil {
+		t.Fatalf("Verify plain tar: %v", err)
+	}
+	if res.Status != "pass" {
+		t.Fatalf("expected pass, got %s: %s", res.Status, res.Reason)
 	}
 }
 
@@ -324,7 +362,10 @@ func sha256Sum(data []byte) []byte {
 
 func mustExtractBundle(t *testing.T, r io.Reader) *Bundle {
 	t.Helper()
-	tr := tar.NewReader(r)
+	tr, err := bundleTarReader(r)
+	if err != nil {
+		t.Fatalf("bundle reader: %v", err)
+	}
 	b := &Bundle{PublicKeys: map[string][]byte{}, RawFiles: map[string][]byte{}}
 	for {
 		hdr, err := tr.Next()
@@ -370,6 +411,14 @@ func mustExtractBundle(t *testing.T, r io.Reader) *Bundle {
 }
 
 func writeBundle(w io.Writer, b *Bundle) error {
+	var tarBuf bytes.Buffer
+	if err := writeBundlePlainTar(&tarBuf, b); err != nil {
+		return err
+	}
+	return writeZstd(w, tarBuf.Bytes())
+}
+
+func writeBundlePlainTar(w io.Writer, b *Bundle) error {
 	// Start with original raw bytes for everything except manifest,
 	// which we re-serialize because we modified it.
 	files := make(map[string][]byte, len(b.RawFiles))
@@ -394,6 +443,18 @@ func writeBundle(w io.Writer, b *Bundle) error {
 		}
 	}
 	return tw.Close()
+}
+
+func writeZstd(w io.Writer, data []byte) error {
+	zw, err := zstd.NewWriter(w)
+	if err != nil {
+		return err
+	}
+	if _, err := zw.Write(data); err != nil {
+		_ = zw.Close()
+		return err
+	}
+	return zw.Close()
 }
 
 func resignManifest(t *testing.T, b *Bundle, priv ed25519.PrivateKey) {
