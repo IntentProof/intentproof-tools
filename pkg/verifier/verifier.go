@@ -18,6 +18,16 @@ import (
 // nowFunc is swappable for deterministic tests.
 var nowFunc = func() time.Time { return time.Now().UTC() }
 
+// SetNowFuncForTest overrides the verifier clock and returns a restore
+// function. It is intended for deterministic golden fixtures.
+func SetNowFuncForTest(f func() time.Time) func() {
+	old := nowFunc
+	nowFunc = f
+	return func() {
+		nowFunc = old
+	}
+}
+
 func init() {
 	if os.Getenv("INTENTPROOF_DETERMINISTIC_TIME") == "1" {
 		nowFunc = func() time.Time {
@@ -573,7 +583,7 @@ func evaluateConsensus(r rule, atts []attestation) map[string]interface{} {
 	}
 
 	// Validate threshold contains exactly one supported operator.
-	if threshold == nil || len(threshold) == 0 {
+	if len(threshold) == 0 {
 		return finding(r, "fail", "fail.consensus.threshold_unmet",
 			"consensus: threshold is required", nil, nil)
 	}

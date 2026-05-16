@@ -88,6 +88,7 @@ type CreateOptions struct {
 	CertificateJSON   []byte
 	InclusionProof    []byte
 	PublicKeys        map[string][]byte
+	CreatedAt         time.Time
 	Signer            func([]byte) (*SignatureEnvelope, error)
 }
 
@@ -129,11 +130,15 @@ func Create(w io.Writer, opts CreateOptions) error {
 
 	eventMerkle := computeItemMerkle(events, "event_id")
 	attMerkle := computeItemMerkle(atts, "attestation_id")
+	createdAt := opts.CreatedAt.UTC()
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
 
 	manifest := &Manifest{
 		Schema:      "intentproof.bundle.manifest.v1",
 		BundleID:    opts.BundleID,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		CreatedAt:   createdAt.Format(time.RFC3339),
 		FlowID:      opts.FlowID,
 		TenantID:    opts.TenantID,
 		Files:       manifestEntries,
@@ -162,7 +167,13 @@ func Create(w io.Writer, opts CreateOptions) error {
 	// Build tar archive in memory.
 	var tarBuf bytes.Buffer
 	tw := tar.NewWriter(&tarBuf)
-	for name, body := range files {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		body := files[name]
 		hdr := &tar.Header{
 			Name: name,
 			Mode: 0644,
