@@ -255,20 +255,8 @@ func evaluateRule(r rule, events []event, atts []attestation) map[string]interfa
 	case "claim_match":
 		return evaluateClaimMatch(r, atts)
 	default:
-		reason := unsupportedRuleCategoryReason(r.Category)
-		return finding(r, "inconclusive", reason,
+		return finding(r, "inconclusive", "inconclusive.unknown.unsupported_rule_category",
 			fmt.Sprintf("rule category not evaluated: %s", r.Category), nil, nil)
-	}
-}
-
-func unsupportedRuleCategoryReason(category string) string {
-	switch category {
-	case "value_bound":
-		return "inconclusive.value_bound.unsupported_rule_category"
-	case "claim_match":
-		return "inconclusive.claim_match.unsupported_rule_category"
-	default:
-		return "inconclusive.required.unsupported_rule_category"
 	}
 }
 

@@ -258,6 +258,23 @@ func TestVerifyTemporalInvalidMaxDurationInconclusive(t *testing.T) {
 	}
 }
 
+func TestVerifyNonDSLRuleCategoryUsesUnknownReason(t *testing.T) {
+	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
+	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"custom_check","severity":"medium","spec":{}}]}`)
+
+	run, err := Verify(flow, policy, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if run.Status != "inconclusive" {
+		t.Fatalf("expected inconclusive, got %s", run.Status)
+	}
+	reason := run.Findings[0]["reason"].(string)
+	if reason != "inconclusive.unknown.unsupported_rule_category" {
+		t.Fatalf("reason: want inconclusive.unknown.unsupported_rule_category, got %s", reason)
+	}
+}
+
 func TestVerifyConsensusUnanimousPass(t *testing.T) {
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0000","events":[]}`)
 	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[{"id":"r1","category":"consensus","severity":"critical","spec":{"claim":"refund.ok","sources":[{"kind":"external","source_id":"stripe"}],"threshold":{"unanimous":true}}}]}`)
