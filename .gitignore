@@ -6,3 +6,6 @@ coverage.out
 # go build -o at repo root
 /intentproof
 /intentproof-verify
+
+# Demo / local bundle output
+*.proof.tar

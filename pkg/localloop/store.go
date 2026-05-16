@@ -1,6 +1,7 @@
 package localloop
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/hex"
@@ -387,6 +388,117 @@ func GetFlowByCorrelationID(ctx context.Context, db *sql.DB, tenantID, correlati
 		return nil, err
 	}
 	return &snap, nil
+}
+
+// verifierFlowEvent is the subset of an execution event consumed by
+// pkg/verifier.Verify.
+type verifierFlowEvent struct {
+	EventID     string                 `json:"event_id"`
+	Action      string                 `json:"action"`
+	Status      string                 `json:"status"`
+	StartedAt   string                 `json:"started_at"`
+	CompletedAt string                 `json:"completed_at"`
+	Attributes  map[string]interface{} `json:"attributes,omitempty"`
+}
+
+// verifierFlowDoc is flow JSON consumable by pkg/verifier.Verify.
+type verifierFlowDoc struct {
+	FlowID         string              `json:"flow_id"`
+	TenantID       string              `json:"tenant_id"`
+	FlowMerkleRoot string              `json:"flow_merkle_root"`
+	Events         []verifierFlowEvent `json:"events"`
+}
+
+// BuildVerifierFlowJSON builds verifier flow JSON for the latest materialized
+// snapshot of a correlation.
+func BuildVerifierFlowJSON(ctx context.Context, db *sql.DB, tenantID, correlationID string) ([]byte, error) {
+	snap, err := GetFlowByCorrelationID(ctx, db, tenantID, correlationID)
+	if err != nil {
+		return nil, fmt.Errorf("get flow snapshot: %w", err)
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT body FROM execution_events
+		WHERE tenant_id = ? AND correlation_id = ?
+		ORDER BY chain_position ASC, event_id ASC`,
+		tenantID, correlationID)
+	if err != nil {
+		return nil, fmt.Errorf("query events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []verifierFlowEvent
+	for rows.Next() {
+		var bodyStr string
+		if err := rows.Scan(&bodyStr); err != nil {
+			return nil, err
+		}
+		var full ExecutionEvent
+		if err := json.Unmarshal([]byte(bodyStr), &full); err != nil {
+			return nil, fmt.Errorf("decode event body: %w", err)
+		}
+		attrs := map[string]interface{}(nil)
+		if len(full.Attributes) > 0 {
+			attrs = make(map[string]interface{}, len(full.Attributes))
+			for k, v := range full.Attributes {
+				attrs[k] = v
+			}
+		}
+		events = append(events, verifierFlowEvent{
+			EventID:     full.EventID,
+			Action:      full.Action,
+			Status:      full.Status,
+			StartedAt:   full.StartedAt.UTC().Format(time.RFC3339),
+			CompletedAt: full.CompletedAt.UTC().Format(time.RFC3339),
+			Attributes:  attrs,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	doc := verifierFlowDoc{
+		FlowID:         snap.FlowID,
+		TenantID:       snap.TenantID,
+		FlowMerkleRoot: snap.FlowMerkleRoot,
+		Events:         events,
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return nil, fmt.Errorf("marshal flow doc: %w", err)
+	}
+	return raw, nil
+}
+
+// LoadEventsJSONL returns JSONL event bodies (one signed ExecutionEvent JSON
+// per line) for a correlation, ordered by chain position.
+func LoadEventsJSONL(ctx context.Context, db *sql.DB, tenantID, correlationID string) ([]byte, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT body FROM execution_events
+		WHERE tenant_id = ? AND correlation_id = ?
+		ORDER BY chain_position ASC, event_id ASC`,
+		tenantID, correlationID)
+	if err != nil {
+		return nil, fmt.Errorf("query events: %w", err)
+	}
+	defer rows.Close()
+
+	var buf bytes.Buffer
+	first := true
+	for rows.Next() {
+		var body string
+		if err := rows.Scan(&body); err != nil {
+			return nil, err
+		}
+		if !first {
+			buf.WriteByte('\n')
+		}
+		first = false
+		buf.WriteString(body)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 const (

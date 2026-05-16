@@ -26,6 +26,20 @@ func MaybeOpenLocalDashboard(dashboardOrigin string) {
 	})
 }
 
+// OpenLocalDashboardBrowser opens the dashboard URL in the default browser
+// immediately when auto-open is enabled. Use this for short-lived commands
+// that call os.Exit right after return: MaybeOpenLocalDashboard waits 400ms and
+// the process may exit before the timer runs.
+// The first return value reports whether a launch was attempted (false when
+// disabled by CI or INTENTPROOF_LOCAL_OPEN_BROWSER).
+func OpenLocalDashboardBrowser(dashboardOrigin string) (attempted bool, err error) {
+	if !localOpenBrowserEnabled() {
+		return false, nil
+	}
+	url := strings.TrimSuffix(strings.TrimSpace(dashboardOrigin), "/") + "/"
+	return true, openDefaultBrowser(url)
+}
+
 func localOpenBrowserEnabled() bool {
 	if strings.TrimSpace(os.Getenv("CI")) != "" {
 		return false
