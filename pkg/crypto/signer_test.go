@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/base64"
+	"encoding/pem"
 	"math/big"
 	"testing"
 
@@ -145,9 +146,9 @@ func TestLocalEd25519SignerFromBase64(t *testing.T) {
 func TestExtractSignatureEnvelope(t *testing.T) {
 	body := map[string]any{
 		"signature": map[string]any{
-			"alg":     "ed25519",
-			"key_id":  "k1",
-			"value":   "c2ln",
+			"alg":    "ed25519",
+			"key_id": "k1",
+			"value":  "c2ln",
 		},
 	}
 	env, err := ExtractSignatureEnvelope(body)
@@ -292,6 +293,12 @@ func TestVerifyEd25519MultiFormatPublicKeys(t *testing.T) {
 	b64pkix := base64.StdEncoding.EncodeToString(pkix)
 	if err := verifier.Verify(payload, env, []byte(b64pkix)); err != nil {
 		t.Fatalf("base64 pkix key verify: %v", err)
+	}
+
+	// 6. PEM-wrapped PKIX/DER format.
+	pemKey := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pkix})
+	if err := verifier.Verify(payload, env, pemKey); err != nil {
+		t.Fatalf("pem pkix key verify: %v", err)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -264,6 +265,159 @@ func TestVerifyPlainTarBackCompat(t *testing.T) {
 	}
 }
 
+func TestVerifyEmbeddedObjectSignatures(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	event := map[string]interface{}{
+		"event_id": "e1",
+		"action":   "pay",
+		"status":   "ok",
+	}
+	signMap(t, event, "signature", priv, "object:k1", []string{"signature"})
+
+	attestation := map[string]interface{}{
+		"attestation_id": "a1",
+		"claim":          "refund.ok",
+		"claim_value":    true,
+	}
+	signMap(t, attestation, "platform_signature", priv, "object:k1", []string{"platform_signature"})
+
+	run := map[string]interface{}{
+		"run_id":          "run_f1",
+		"flow_id":         "f1",
+		"status":          "pass",
+		"started_at":      "2026-05-12T00:00:00Z",
+		"completed_at":    "2026-05-12T00:00:01Z",
+		"findings":        []interface{}{},
+		"run_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+	}
+	signMap(t, run, "signature", priv, "object:k1", []string{
+		"signature",
+		"run_fingerprint",
+		"started_at",
+		"completed_at",
+	})
+
+	certificate := map[string]interface{}{
+		"certificate_id": "cert_f1",
+		"run_id":         "run_f1",
+		"issued_at":      "2026-05-12T00:00:02Z",
+	}
+	signMap(t, certificate, "signature", priv, "object:k1", []string{"signature"})
+
+	opts := buildTestBundleOpts(t, nil)
+	opts.EventsJSONL = jsonlBytes([]map[string]interface{}{event})
+	opts.AttestationsJSONL = jsonlBytes([]map[string]interface{}{attestation})
+	opts.RunJSON = jsonOrEmpty(run)
+	opts.CertificateJSON = jsonOrEmpty(certificate)
+	opts.PublicKeys = map[string][]byte{"object:k1": pub}
+
+	var buf bytes.Buffer
+	if err := Create(&buf, opts); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	res, err := Verify(&buf, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if res.Status != "pass" {
+		t.Fatalf("expected pass, got %s: %s findings=%v", res.Status, res.Reason, res.Findings)
+	}
+	for _, want := range []string{
+		"event.signature_valid",
+		"attestation.signature_valid",
+		"run.signature_valid",
+		"certificate.signature_valid",
+	} {
+		if !hasFinding(res.Findings, want) {
+			t.Fatalf("expected %q, findings=%v", want, res.Findings)
+		}
+	}
+}
+
+func TestVerifyEmbeddedObjectSignatureInvalid(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	event := map[string]interface{}{
+		"event_id": "e1",
+		"action":   "pay",
+		"status":   "ok",
+	}
+	signMap(t, event, "signature", priv, "object:k1", []string{"signature"})
+	event["action"] = "tampered"
+
+	opts := buildTestBundleOpts(t, nil)
+	opts.EventsJSONL = jsonlBytes([]map[string]interface{}{event})
+	opts.PublicKeys = map[string][]byte{"object:k1": pub}
+
+	var buf bytes.Buffer
+	if err := Create(&buf, opts); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	res, err := Verify(&buf, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if res.Status != "fail" || res.Reason != "bundle.object_signature_invalid" {
+		t.Fatalf("expected object signature failure, got status=%s reason=%s findings=%v",
+			res.Status, res.Reason, res.Findings)
+	}
+	if !hasFinding(res.Findings, "event.signature_invalid") {
+		t.Fatalf("expected event.signature_invalid, findings=%v", res.Findings)
+	}
+}
+
+func TestVerifyEmbeddedHexObjectSignature(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	event := map[string]interface{}{
+		"event_id": "e1",
+		"action":   "pay",
+		"status":   "ok",
+	}
+	payload, err := canonicalSignedMap(event, []string{"signature"})
+	if err != nil {
+		t.Fatalf("canonical signed map: %v", err)
+	}
+	event["signature"] = map[string]interface{}{
+		"alg":    "ed25519",
+		"key_id": "object:k1",
+		"value":  hex.EncodeToString(ed25519.Sign(priv, sha256Sum(payload))),
+	}
+
+	opts := buildTestBundleOpts(t, nil)
+	opts.EventsJSONL = jsonlBytes([]map[string]interface{}{event})
+	opts.PublicKeys = map[string][]byte{"object:k1": pub}
+
+	var buf bytes.Buffer
+	if err := Create(&buf, opts); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	res, err := Verify(&buf, nil)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if res.Status != "pass" {
+		t.Fatalf("expected pass, got status=%s reason=%s findings=%v",
+			res.Status, res.Reason, res.Findings)
+	}
+	if !hasFinding(res.Findings, "event.signature_valid") {
+		t.Fatalf("expected event.signature_valid, findings=%v", res.Findings)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -474,4 +628,25 @@ func resignManifest(t *testing.T, b *Bundle, priv ed25519.PrivateKey) {
 func jsonOrEmpty(v map[string]interface{}) []byte {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+func signMap(
+	t *testing.T,
+	doc map[string]interface{},
+	field string,
+	priv ed25519.PrivateKey,
+	keyID string,
+	excludedFields []string,
+) {
+	t.Helper()
+	payload, err := canonicalSignedMap(doc, excludedFields)
+	if err != nil {
+		t.Fatalf("canonical signed map: %v", err)
+	}
+	sig := ed25519.Sign(priv, sha256Sum(payload))
+	doc[field] = map[string]interface{}{
+		"alg":    "ed25519",
+		"key_id": keyID,
+		"value":  base64.StdEncoding.EncodeToString(sig),
+	}
 }
