@@ -98,6 +98,7 @@ func TestLocalAcceptance(t *testing.T) {
 		fmt.Sprintf("INTENTPROOF_LOCAL_INGEST_ADDR=:%d", port1),
 		fmt.Sprintf("INTENTPROOF_LOCAL_VERIFIER_ADDR=:%d", port2),
 		fmt.Sprintf("INTENTPROOF_LOCAL_DASHBOARD_ADDR=:%d", port3),
+		"INTENTPROOF_LOCAL_OPEN_BROWSER=0",
 	)
 	var stderrBuf bytes.Buffer
 	cmd.Stdout = io.Discard

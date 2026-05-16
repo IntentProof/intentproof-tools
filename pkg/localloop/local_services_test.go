@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
@@ -154,6 +156,78 @@ func TestLocalPublicBaseURL(t *testing.T) {
 	}
 	if u := LocalPublicBaseURL(""); u != "http://localhost:9787" {
 		t.Fatalf("empty default got %q", u)
+	}
+}
+
+func TestLocalDashboardHandler_healthzAndHome(t *testing.T) {
+	db, err := OpenDB(filepath.Join(t.TempDir(), "dash.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	links := LocalDashboardLinks{
+		IngestURL:    "http://localhost:19777",
+		VerifierURL:  "http://localhost:19788",
+		DashboardURL: "http://localhost:19799",
+	}
+	h := LocalDashboardHandler(db, links)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("healthz: %d %q", rec.Code, rec.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("home: %d", rec2.Code)
+	}
+	body := rec2.Body.String()
+	if !strings.Contains(body, "Endpoints") {
+		t.Fatalf("expected endpoints panel in HTML")
+	}
+	if !strings.Contains(body, "http://localhost:19777/v1/events") {
+		t.Fatalf("expected ingest URL in HTML")
+	}
+	if !strings.Contains(body, "Flows") {
+		t.Fatalf("expected flows section")
+	}
+}
+
+func TestLocalDashboard_flowSortOpenBeforeClosed(t *testing.T) {
+	db, err := OpenDB(filepath.Join(t.TempDir(), "sort.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	_, err = db.Exec(`INSERT INTO flows (tenant_id, flow_id, correlation_id, window_closed_at, event_count, flow_merkle_root)
+		VALUES (?, 'flow_closed', 'corr_closed', '2020-01-01T00:00:00Z', 1, 'sha256:aa')`, LocalTenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO flows (tenant_id, flow_id, correlation_id, window_opened_at, window_closed_at, event_count, flow_merkle_root)
+		VALUES (?, 'flow_open', 'corr_open', '2026-01-01T00:00:00Z', NULL, 1, 'sha256:bb')`, LocalTenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := LocalDashboardHandler(db, LocalDashboardLinks{})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("home: %d", rec.Code)
+	}
+	body := rec.Body.String()
+	iOpen := strings.Index(body, "corr_open")
+	iClosed := strings.Index(body, "corr_closed")
+	if iOpen < 0 || iClosed < 0 {
+		t.Fatalf("missing correlations open=%d closed=%d", iOpen, iClosed)
+	}
+	if iOpen > iClosed {
+		t.Fatalf("open flow should sort before closed: open idx=%d closed idx=%d", iOpen, iClosed)
 	}
 }
 
