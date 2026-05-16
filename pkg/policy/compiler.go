@@ -67,6 +67,7 @@ type yamlRule struct {
 	Type               string           `yaml:"type"`
 	Category           string           `yaml:"category"`
 	Severity           string           `yaml:"severity"`
+	Spec               map[string]any   `yaml:"spec"`
 	Action             string           `yaml:"action"`
 	Min                any              `yaml:"min"`
 	Max                any              `yaml:"max"`
@@ -208,6 +209,15 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 	}
 	if err := validateSeverity(severity); err != nil {
 		return CanonicalRule{}, err
+	}
+
+	if len(rule.Spec) > 0 {
+		return CanonicalRule{
+			ID:       id,
+			Category: category,
+			Severity: severity,
+			Spec:     normalizeStringMap(rule.Spec),
+		}, nil
 	}
 
 	spec := map[string]any{}
