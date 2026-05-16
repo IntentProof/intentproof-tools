@@ -39,4 +39,19 @@ func TestRunRefundEndToEnd(t *testing.T) {
 	if vr.Status != "pass" {
 		t.Fatalf("bundle status: %s reason=%s findings=%v", vr.Status, vr.Reason, vr.Findings)
 	}
+	if !hasBundleFinding(vr.Findings, "event.signature_valid") {
+		t.Fatalf("expected event signature validation, findings=%v", vr.Findings)
+	}
+	if hasBundleFinding(vr.Findings, "event.signature_key_unavailable") {
+		t.Fatalf("expected demo bundle to include event public keys, findings=%v", vr.Findings)
+	}
+}
+
+func hasBundleFinding(findings []string, needle string) bool {
+	for _, finding := range findings {
+		if finding == needle {
+			return true
+		}
+	}
+	return false
 }
