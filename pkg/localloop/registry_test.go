@@ -75,6 +75,66 @@ func TestBootstrapLocalRegistryFromSDKKeypair(t *testing.T) {
 	}
 }
 
+func TestLoadSDKPublicKeysForCorrelation(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenDB(filepath.Join(dir, "local.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub := priv.Public().(ed25519.PublicKey)
+	ctx := context.Background()
+	if err := RegisterSDKInstance(ctx, db, LocalTenantID, "inst_bundle", pub); err != nil {
+		t.Fatal(err)
+	}
+
+	ev := ExecutionEvent{
+		Schema:        "intentproof.event.v1",
+		EventID:       "evt_bundle",
+		TenantID:      LocalTenantID,
+		InstanceID:    "inst_bundle",
+		CorrelationID: "corr_bundle",
+		PrevEventHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		ChainPosition: 1,
+		Action:        "act",
+		Status:        "ok",
+		StartedAt:     mustTime(t),
+		CompletedAt:   mustTime(t),
+		DurationMS:    1,
+		SpecVersion:   "1.0.0",
+		Attributes:    map[string]any{},
+	}
+	ev, err = SignExecutionEvent(ev, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonBytes, err := canonicalizeWithoutSignature(ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := sha256Sum(canonBytes)
+	if _, err := StoreEvent(ctx, db, ev, d[:]); err != nil {
+		t.Fatal(err)
+	}
+
+	keys, err := LoadSDKPublicKeysForCorrelation(ctx, db, LocalTenantID, "corr_bundle")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := keys["inst_bundle:k1"]
+	if !ok {
+		t.Fatalf("missing key entry: %#v", keys)
+	}
+	if string(got) != string(pub) {
+		t.Fatalf("unexpected public key bytes")
+	}
+}
+
 func mustTime(t *testing.T) time.Time {
 	t.Helper()
 	return time.Now().UTC().Truncate(time.Millisecond)

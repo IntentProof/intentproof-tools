@@ -224,6 +224,10 @@ func RunRefund(ctx context.Context, opt Options) error {
 	if err != nil {
 		return fmt.Errorf("load events jsonl: %w", err)
 	}
+	publicKeys, err := localloop.LoadSDKPublicKeysForCorrelation(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
+	if err != nil {
+		return fmt.Errorf("load sdk public keys: %w", err)
+	}
 
 	var flowMap map[string]interface{}
 	if err := json.Unmarshal(flowJSON, &flowMap); err != nil {
@@ -257,6 +261,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 		AttestationsJSONL: nil,
 		PolicyJSON:        policyPretty,
 		RunJSON:           runJSON,
+		PublicKeys:        publicKeys,
 	})
 	_ = bf.Close()
 	if err != nil {

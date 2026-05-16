@@ -95,6 +95,48 @@ WHERE tenant_id = ? AND instance_id = ? AND revoked_at IS NULL`,
 	return ed25519.PublicKey(pub), nil
 }
 
+// LoadSDKPublicKeysForCorrelation returns bundle key entries for the SDK
+// instances that emitted events in a correlation.
+func LoadSDKPublicKeysForCorrelation(
+	ctx context.Context,
+	db *sql.DB,
+	tenantID, correlationID string,
+) (map[string][]byte, error) {
+	rows, err := db.QueryContext(ctx, `
+SELECT DISTINCT e.instance_id, s.public_key
+FROM execution_events e
+JOIN sdk_instances s
+  ON s.tenant_id = e.tenant_id
+ AND s.instance_id = e.instance_id
+WHERE e.tenant_id = ? AND e.correlation_id = ?
+ORDER BY e.instance_id ASC`,
+		tenantID, correlationID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load sdk public keys: %w", err)
+	}
+	defer rows.Close()
+
+	keys := map[string][]byte{}
+	for rows.Next() {
+		var instanceID string
+		var pub []byte
+		if err := rows.Scan(&instanceID, &pub); err != nil {
+			return nil, fmt.Errorf("scan sdk public key: %w", err)
+		}
+		if len(pub) != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("load sdk public keys: invalid public key length for %s", instanceID)
+		}
+		key := make([]byte, len(pub))
+		copy(key, pub)
+		keys[instanceID+":k1"] = key
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("load sdk public keys: %w", err)
+	}
+	return keys, nil
+}
+
 func verifyEventSignature(
 	ctx context.Context,
 	db *sql.DB,
