@@ -15,7 +15,7 @@ func writeUnknownCommand(stderr io.Writer, label, cmd string) {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
-		writeUsage(stderr, "Usage: intentproof <command>\nCommands: demo, local, policy, verify")
+		writeUsage(stderr, "Usage: intentproof <command>\nCommands: demo, local, policy, reference, verify")
 		return 1
 	}
 
@@ -30,6 +30,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 0
 	case "policy":
 		return runPolicy(args[1:], stdout, stderr)
+	case "reference":
+		return runReference(args[1:], stdout, stderr)
 	case "verify":
 		return runVerify(args[1:], stdout, stderr)
 	default:
