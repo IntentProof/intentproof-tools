@@ -17,9 +17,9 @@ type RuleCount struct {
 }
 
 type CompileResult struct {
-	Policy     CanonicalPolicy
+	Policy      CanonicalPolicy
 	Fingerprint string
-	RuleCounts []RuleCount
+	RuleCounts  []RuleCount
 }
 
 type CanonicalPolicy struct {
@@ -63,33 +63,33 @@ type yamlScope struct {
 }
 
 type yamlRule struct {
-	ID                 string            `yaml:"id"`
-	Type               string            `yaml:"type"`
-	Category           string            `yaml:"category"`
-	Severity           string            `yaml:"severity"`
-	Action             string            `yaml:"action"`
-	Min                any               `yaml:"min"`
-	Max                any               `yaml:"max"`
-	Exactly            any               `yaml:"exactly"`
-	Where              map[string]any    `yaml:"where"`
-	After              string            `yaml:"after"`
-	Before             string            `yaml:"before"`
-	WherePredecessor   map[string]any    `yaml:"where_predecessor"`
-	WithoutPredecessor string            `yaml:"without_predecessor"`
-	CountBasis         string            `yaml:"count_basis"`
-	AllRequiredOK      *bool             `yaml:"all_required_ok"`
-	From               map[string]any    `yaml:"from"`
-	To                 map[string]any    `yaml:"to"`
-	ClockSkewTolerance string            `yaml:"clock_skew_tolerance"`
-	Claim              string            `yaml:"claim"`
-	ExpectedValue      any               `yaml:"expected_value"`
-	RequireSigned      *bool             `yaml:"require_signed_sources"`
-	RequireSignedAlias *bool             `yaml:"require_signed"`
-	Sources            []map[string]any  `yaml:"sources"`
-	Threshold          map[string]any    `yaml:"threshold"`
-	Operator           string            `yaml:"operator"`
-	Value              any               `yaml:"value"`
-	SourceID           string            `yaml:"source_id"`
+	ID                 string           `yaml:"id"`
+	Type               string           `yaml:"type"`
+	Category           string           `yaml:"category"`
+	Severity           string           `yaml:"severity"`
+	Action             string           `yaml:"action"`
+	Min                any              `yaml:"min"`
+	Max                any              `yaml:"max"`
+	Exactly            any              `yaml:"exactly"`
+	Where              map[string]any   `yaml:"where"`
+	After              string           `yaml:"after"`
+	Before             string           `yaml:"before"`
+	WherePredecessor   map[string]any   `yaml:"where_predecessor"`
+	WithoutPredecessor string           `yaml:"without_predecessor"`
+	CountBasis         string           `yaml:"count_basis"`
+	AllRequiredOK      *bool            `yaml:"all_required_ok"`
+	From               map[string]any   `yaml:"from"`
+	To                 map[string]any   `yaml:"to"`
+	ClockSkewTolerance string           `yaml:"clock_skew_tolerance"`
+	Claim              string           `yaml:"claim"`
+	ExpectedValue      any              `yaml:"expected_value"`
+	RequireSigned      *bool            `yaml:"require_signed_sources"`
+	RequireSignedAlias *bool            `yaml:"require_signed"`
+	Sources            []map[string]any `yaml:"sources"`
+	Threshold          map[string]any   `yaml:"threshold"`
+	Operator           string           `yaml:"operator"`
+	Value              any              `yaml:"value"`
+	SourceID           string           `yaml:"source_id"`
 }
 
 func CompileFile(path string) (*CompileResult, error) {
@@ -134,25 +134,18 @@ func Compile(raw []byte) (*CompileResult, error) {
 		return nil, errors.New("scope requires match_action or any_event_action_in")
 	}
 
-	seenRuleIDs := make(map[string]struct{}, len(input.Rules))
-	for _, rule := range input.Rules {
-		id := strings.TrimSpace(rule.ID)
-		if id == "" {
-			continue
-		}
-		if _, dup := seenRuleIDs[id]; dup {
-			return nil, fmt.Errorf("duplicate rule id %q", id)
-		}
-		seenRuleIDs[id] = struct{}{}
-	}
-
 	rules := make([]CanonicalRule, 0, len(input.Rules))
 	ruleCounts := map[string]int{}
+	seenRuleIDs := make(map[string]struct{}, len(input.Rules))
 	for i, rule := range input.Rules {
 		canonical, err := compileRule(rule)
 		if err != nil {
 			return nil, fmt.Errorf("rule %d: %w", i+1, err)
 		}
+		if _, dup := seenRuleIDs[canonical.ID]; dup {
+			return nil, fmt.Errorf("rule %d: duplicate rule id %q", i+1, canonical.ID)
+		}
+		seenRuleIDs[canonical.ID] = struct{}{}
 		rules = append(rules, canonical)
 		ruleCounts[canonical.Category]++
 	}
@@ -196,12 +189,17 @@ func Compile(raw []byte) (*CompileResult, error) {
 }
 
 func compileRule(rule yamlRule) (CanonicalRule, error) {
+	id := strings.TrimSpace(rule.ID)
+	if id == "" {
+		return CanonicalRule{}, errors.New("rule id is required")
+	}
+
 	category := strings.TrimSpace(rule.Category)
 	if category == "" {
 		category = strings.TrimSpace(rule.Type)
 	}
-	if rule.ID == "" || category == "" {
-		return CanonicalRule{}, errors.New("rule id and type/category are required")
+	if category == "" {
+		return CanonicalRule{}, errors.New("rule type or category is required")
 	}
 
 	severity := strings.TrimSpace(rule.Severity)
@@ -422,7 +420,7 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 	}
 
 	return CanonicalRule{
-		ID:       rule.ID,
+		ID:       id,
 		Category: category,
 		Severity: severity,
 		Spec:     spec,

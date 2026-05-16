@@ -117,6 +117,35 @@ func TestCompileAcceptsDistinctRuleIDs(t *testing.T) {
 	}
 }
 
+func TestCompileRejectsWhitespaceOnlyRuleID(t *testing.T) {
+	raw := wrap(`  - id: "   "
+    type: required
+    action: demo.action
+    min: 1
+`)
+	_, err := Compile(raw)
+	if err == nil || !strings.Contains(err.Error(), "rule id is required") {
+		t.Fatalf("expected rule id error, got: %v", err)
+	}
+}
+
+func TestCompileRejectsDuplicateWhitespaceOnlyRuleIDs(t *testing.T) {
+	// Two rules whose raw ids are different but trim to empty: first fails
+	// before duplicate logic; second would be wrong if empty ids slipped through.
+	raw := wrap(`  - id: "  "
+    type: required
+    action: demo.action
+    min: 1
+  - id: "\t"
+    type: forbidden
+    action: demo.action
+`)
+	_, err := Compile(raw)
+	if err == nil || !strings.Contains(err.Error(), "rule id is required") {
+		t.Fatalf("expected rule id error, got: %v", err)
+	}
+}
+
 func TestCompileRejectsCardinalityMutualExclusion(t *testing.T) {
 	raw := []byte(`
 policy_id: tnt_acme.bad
