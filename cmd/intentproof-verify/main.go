@@ -23,13 +23,13 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	var outputPath string
 	fs := flag.NewFlagSet("intentproof-verify", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.StringVar(&outputPath, "output", "", "write signed VerificationRun JSON to path")
+	fs.StringVar(&outputPath, "output", "", "write JSON result to path")
 	if err := fs.Parse(args); err != nil {
 		return writeError(stderr, "error: %v\n", err)
 	}
 	remaining := fs.Args()
 	if len(remaining) == 1 {
-		return runBundleVerify(remaining[0], stdout, stderr)
+		return runBundleVerify(remaining[0], outputPath, stdout, stderr)
 	}
 	if len(remaining) < 3 {
 		writeUsage(stderr)
@@ -90,7 +90,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
-func runBundleVerify(path string, stdout io.Writer, stderr io.Writer) int {
+func runBundleVerify(path string, outputPath string, stdout io.Writer, stderr io.Writer) int {
 	raw, err := readInputFile(path)
 	if err != nil {
 		return writeError(stderr, "error: %v\n", err)
@@ -98,6 +98,19 @@ func runBundleVerify(path string, stdout io.Writer, stderr io.Writer) int {
 	vr, err := bundle.Verify(bytes.NewReader(raw), nil)
 	if err != nil {
 		return writeError(stderr, "error: verify bundle: %v\n", err)
+	}
+	if outputPath != "" {
+		raw, err := json.MarshalIndent(vr, "", "  ")
+		if err != nil {
+			return writeError(stderr, "error: marshal bundle result: %v\n", err)
+		}
+		if err := os.WriteFile(outputPath, raw, 0o644); err != nil {
+			return writeError(stderr, "error: write output: %v\n", err)
+		}
+		if vr.Status != "pass" {
+			return 1
+		}
+		return 0
 	}
 	marker := "✓ pass"
 	if vr.Status != "pass" {
