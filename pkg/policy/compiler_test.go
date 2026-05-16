@@ -167,6 +167,20 @@ rules:
 	}
 }
 
+func TestCompileRejectsUnknownCategoryWithCanonicalSpec(t *testing.T) {
+	raw := wrap(`  - id: typo
+    category: requred
+    spec:
+      action: demo.action
+      min: 1
+`)
+
+	_, err := Compile(raw)
+	if err == nil || !strings.Contains(err.Error(), "unknown rule category: requred") {
+		t.Fatalf("expected unknown category error, got: %v", err)
+	}
+}
+
 // wrap embeds a YAML rule body inside a minimal valid policy envelope so
 // tests can focus on per-rule validation.
 func wrap(rules string) []byte {

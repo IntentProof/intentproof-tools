@@ -210,6 +210,9 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 	if err := validateSeverity(severity); err != nil {
 		return CanonicalRule{}, err
 	}
+	if !isKnownRuleCategory(category) {
+		return CanonicalRule{}, fmt.Errorf("unknown rule category: %s", category)
+	}
 
 	if len(rule.Spec) > 0 {
 		return CanonicalRule{
@@ -435,6 +438,16 @@ func compileRule(rule yamlRule) (CanonicalRule, error) {
 		Severity: severity,
 		Spec:     spec,
 	}, nil
+}
+
+func isKnownRuleCategory(category string) bool {
+	switch category {
+	case "required", "forbidden", "ordering", "cardinality", "temporal",
+		"consensus", "value_bound", "claim_match":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateThreshold(threshold map[string]any) error {
