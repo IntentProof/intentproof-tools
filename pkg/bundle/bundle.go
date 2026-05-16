@@ -9,8 +9,11 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"sort"
@@ -336,6 +339,19 @@ func Verify(r io.Reader, pubkey []byte) (*VerifyResult, error) {
 		findings = append(findings, "attestation_merkle_valid")
 	}
 
+	var sigErr error
+	findings, sigErr = verifyObjectSignatures(b, findings)
+	if sigErr != nil {
+		return nil, sigErr
+	}
+	for _, f := range findings {
+		if strings.HasSuffix(f, "_invalid") ||
+			strings.HasSuffix(f, "_unsupported_alg") ||
+			strings.HasSuffix(f, "_decode_failed") {
+			return &VerifyResult{Status: "fail", Reason: "bundle.object_signature_invalid", Findings: findings}, nil
+		}
+	}
+
 	findings = append(findings, "bundle.verify_pass")
 	return &VerifyResult{Status: "pass", Reason: "bundle.verify_pass", Findings: findings}, nil
 }
@@ -444,4 +460,148 @@ func computeItemMerkle(items []map[string]interface{}, idField string) string {
 		leaves[i] = []byte(id)
 	}
 	return merkle.RootHex(leaves)
+}
+
+func verifyObjectSignatures(b *Bundle, findings []string) ([]string, error) {
+	for _, ev := range b.Events {
+		var err error
+		findings, err = verifySignedMap(b, findings, "event", "signature", ev, []string{"signature"})
+		if err != nil {
+			return findings, err
+		}
+	}
+	for _, att := range b.Attestations {
+		var err error
+		findings, err = verifySignedMap(b, findings, "attestation", "platform_signature", att, []string{"platform_signature"})
+		if err != nil {
+			return findings, err
+		}
+	}
+	if b.Run != nil {
+		var err error
+		findings, err = verifySignedMap(b, findings, "run", "signature", b.Run, []string{
+			"signature",
+			"run_fingerprint",
+			"started_at",
+			"completed_at",
+		})
+		if err != nil {
+			return findings, err
+		}
+	}
+	if b.Certificate != nil {
+		var err error
+		findings, err = verifySignedMap(b, findings, "certificate", "signature", b.Certificate, []string{"signature"})
+		if err != nil {
+			return findings, err
+		}
+	}
+	return findings, nil
+}
+
+func verifySignedMap(
+	b *Bundle,
+	findings []string,
+	label string,
+	signatureField string,
+	doc map[string]interface{},
+	excludedFields []string,
+) ([]string, error) {
+	env, ok, err := signatureEnvelopeFromMap(doc, signatureField)
+	if err != nil {
+		findings = append(findings, label+".signature_decode_failed")
+		return findings, nil
+	}
+	if !ok || strings.TrimSpace(env.Value) == "" {
+		return findings, nil
+	}
+	if env.Alg != "ed25519" {
+		findings = append(findings, label+".signature_unsupported_alg")
+		return findings, nil
+	}
+	pubRaw, ok := b.PublicKeys[env.KeyID]
+	if !ok {
+		findings = append(findings, label+".signature_key_unavailable")
+		return findings, nil
+	}
+	pub, err := parseEd25519PublicKey(pubRaw)
+	if err != nil {
+		findings = append(findings, label+".signature_key_unavailable")
+		return findings, nil
+	}
+	sig, err := decodeSignatureValue(env.Value)
+	if err != nil {
+		findings = append(findings, label+".signature_decode_failed")
+		return findings, nil
+	}
+	payload, err := canonicalSignedMap(doc, excludedFields)
+	if err != nil {
+		return findings, fmt.Errorf("bundle.%s_signature_canonicalize: %w", label, err)
+	}
+	if !ed25519.Verify(pub, sha256sum(payload), sig) {
+		findings = append(findings, label+".signature_invalid")
+		return findings, nil
+	}
+	findings = append(findings, label+".signature_valid")
+	return findings, nil
+}
+
+func signatureEnvelopeFromMap(doc map[string]interface{}, field string) (*SignatureEnvelope, bool, error) {
+	raw, ok := doc[field]
+	if !ok || raw == nil {
+		return nil, false, nil
+	}
+	body, err := json.Marshal(raw)
+	if err != nil {
+		return nil, true, err
+	}
+	var env SignatureEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil, true, err
+	}
+	return &env, true, nil
+}
+
+func canonicalSignedMap(doc map[string]interface{}, excludedFields []string) ([]byte, error) {
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	var copy map[string]interface{}
+	if err := json.Unmarshal(raw, &copy); err != nil {
+		return nil, err
+	}
+	for _, field := range excludedFields {
+		delete(copy, field)
+	}
+	return canon.Marshal(copy)
+}
+
+func decodeSignatureValue(value string) ([]byte, error) {
+	if sig, err := base64.StdEncoding.DecodeString(value); err == nil {
+		return sig, nil
+	}
+	return hex.DecodeString(value)
+}
+
+func parseEd25519PublicKey(raw []byte) (ed25519.PublicKey, error) {
+	if len(raw) == ed25519.PublicKeySize {
+		pub := make([]byte, ed25519.PublicKeySize)
+		copy(pub, raw)
+		return pub, nil
+	}
+	if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw))); err == nil {
+		return parseEd25519PublicKey(decoded)
+	}
+	if block, _ := pem.Decode(raw); block != nil {
+		return parseEd25519PublicKey(block.Bytes)
+	}
+	if parsed, err := x509.ParsePKIXPublicKey(raw); err == nil {
+		if pub, ok := parsed.(ed25519.PublicKey); ok {
+			out := make([]byte, len(pub))
+			copy(out, pub)
+			return out, nil
+		}
+	}
+	return nil, fmt.Errorf("unsupported ed25519 public key")
 }
