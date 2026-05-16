@@ -99,6 +99,9 @@ func TestVerifyRequiredRuleFail(t *testing.T) {
 	if run.Findings[0]["outcome"] != "fail" {
 		t.Fatalf("expected finding fail, got %v", run.Findings[0]["outcome"])
 	}
+	if run.Findings[0]["reason"] != "fail.required.missing" {
+		t.Fatalf("expected fail.required.missing, got %v", run.Findings[0]["reason"])
+	}
 }
 
 func TestVerifyRequiredRuleWithWhere(t *testing.T) {

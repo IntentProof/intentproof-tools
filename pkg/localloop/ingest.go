@@ -159,6 +159,22 @@ func canonicalizeWithoutSignature(ev ExecutionEvent) ([]byte, error) {
 	return canon.Marshal(rawMap)
 }
 
+// EventChainDigest returns the SHA-256 digest of the canonical unsigned event
+// body. It matches ingest verification and is used to link prev_event_hash for
+// the following event in a chain.
+func EventChainDigest(ev ExecutionEvent) ([32]byte, error) {
+	b, err := canonicalizeWithoutSignature(ev)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return sha256.Sum256(b), nil
+}
+
+// FormatChainHash formats a digest as prev_event_hash for the next event.
+func FormatChainHash(d [32]byte) string {
+	return "sha256:" + hex.EncodeToString(d[:])
+}
+
 // ListenAndServe starts the ingest HTTP server.
 func (s *IngestServer) ListenAndServe() error {
 	return http.ListenAndServe(s.Addr, s.Handler())

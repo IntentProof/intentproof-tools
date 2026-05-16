@@ -278,9 +278,13 @@ func evaluateRequired(r rule, events []event) map[string]interface{} {
 	}
 
 	if count < minVal {
-		return finding(r, "fail", "fail.required.under_min",
-			fmt.Sprintf("required action %q occurred %d time(s), minimum is %d", action, count, minVal),
-			eventIDs(matched), nil)
+		reason := "fail.required.under_min"
+		summary := fmt.Sprintf("required action %q occurred %d time(s), minimum is %d", action, count, minVal)
+		if count == 0 {
+			reason = "fail.required.missing"
+			summary = fmt.Sprintf("required action %q did not occur (minimum is %d)", action, minVal)
+		}
+		return finding(r, "fail", reason, summary, eventIDs(matched), nil)
 	}
 	if maxVal >= 0 && count > maxVal {
 		return finding(r, "fail", "fail.required.over_max",

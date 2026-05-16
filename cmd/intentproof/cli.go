@@ -15,11 +15,13 @@ func writeUnknownCommand(stderr io.Writer, label, cmd string) {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
-		writeUsage(stderr, "Usage: intentproof <command>")
+		writeUsage(stderr, "Usage: intentproof <command>\nCommands: demo, local, policy, verify")
 		return 1
 	}
 
 	switch args[0] {
+	case "demo":
+		return runDemo(args[1:], stdout, stderr)
 	case "local":
 		if err := startLocalServer(); err != nil {
 			fmt.Fprintf(stderr, "local server failed: %v\n", err)
@@ -28,6 +30,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 0
 	case "policy":
 		return runPolicy(args[1:], stdout, stderr)
+	case "verify":
+		return runVerify(args[1:], stdout, stderr)
 	default:
 		writeUnknownCommand(stderr, "command", args[0])
 		return 1
