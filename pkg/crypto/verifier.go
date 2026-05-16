@@ -9,6 +9,7 @@ import (
 	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
@@ -50,8 +51,7 @@ func (v *PolicySignatureVerifier) Verify(canonicalPayload []byte, env *Signature
 }
 
 func verifyEd25519(digest, sig, pubKey []byte) error {
-	// Try parsing as OpenSSH public key first, then raw.
-	pub, err := parseEd25519PublicKey(pubKey)
+	pub, err := ParseEd25519PublicKey(pubKey)
 	if err != nil {
 		return fmt.Errorf("parse ed25519 public key: %w", err)
 	}
@@ -61,7 +61,9 @@ func verifyEd25519(digest, sig, pubKey []byte) error {
 	return nil
 }
 
-func parseEd25519PublicKey(pubKey []byte) (ed25519.PublicKey, error) {
+// ParseEd25519PublicKey parses the public key formats accepted by IntentProof
+// signature verification paths.
+func ParseEd25519PublicKey(pubKey []byte) (ed25519.PublicKey, error) {
 	// Raw 32-byte key.
 	if len(pubKey) == ed25519.PublicKeySize {
 		pk := make([]byte, ed25519.PublicKeySize)
@@ -79,6 +81,10 @@ func parseEd25519PublicKey(pubKey []byte) (ed25519.PublicKey, error) {
 		}
 		// Not a raw 32-byte key; feed decoded bytes into OpenSSH/PKIX paths.
 		pubKey = decoded
+	}
+
+	if block, _ := pem.Decode(pubKey); block != nil {
+		return ParseEd25519PublicKey(block.Bytes)
 	}
 
 	// Try OpenSSH public key format.

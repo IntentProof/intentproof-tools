@@ -9,11 +9,9 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"sort"
@@ -21,6 +19,7 @@ import (
 	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/canon"
+	ipcrypto "github.com/intentproof/intentproof-tools/pkg/crypto"
 	"github.com/intentproof/intentproof-tools/pkg/merkle"
 	"github.com/intentproof/intentproof-tools/pkg/policysig"
 	"github.com/klauspost/compress/zstd"
@@ -524,7 +523,7 @@ func verifySignedMap(
 		findings = append(findings, label+".signature_key_unavailable")
 		return findings, nil
 	}
-	pub, err := parseEd25519PublicKey(pubRaw)
+	pub, err := ipcrypto.ParseEd25519PublicKey(pubRaw)
 	if err != nil {
 		findings = append(findings, label+".signature_key_unavailable")
 		return findings, nil
@@ -598,26 +597,4 @@ func isEd25519HexSignature(value string) bool {
 		}
 	}
 	return true
-}
-
-func parseEd25519PublicKey(raw []byte) (ed25519.PublicKey, error) {
-	if len(raw) == ed25519.PublicKeySize {
-		pub := make([]byte, ed25519.PublicKeySize)
-		copy(pub, raw)
-		return pub, nil
-	}
-	if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw))); err == nil {
-		return parseEd25519PublicKey(decoded)
-	}
-	if block, _ := pem.Decode(raw); block != nil {
-		return parseEd25519PublicKey(block.Bytes)
-	}
-	if parsed, err := x509.ParsePKIXPublicKey(raw); err == nil {
-		if pub, ok := parsed.(ed25519.PublicKey); ok {
-			out := make([]byte, len(pub))
-			copy(out, pub)
-			return out, nil
-		}
-	}
-	return nil, fmt.Errorf("unsupported ed25519 public key")
 }
