@@ -71,6 +71,81 @@ rules:
 	}
 }
 
+func TestCompileRejectsDuplicateRuleIDs(t *testing.T) {
+	t.Run("exact duplicate id", func(t *testing.T) {
+		raw := wrap(`  - id: foo
+    type: required
+    action: demo.action
+    min: 1
+  - id: foo
+    type: forbidden
+    action: demo.action
+`)
+		_, err := Compile(raw)
+		if err == nil || !strings.Contains(err.Error(), `duplicate rule id "foo"`) {
+			t.Fatalf("expected duplicate id error, got: %v", err)
+		}
+	})
+
+	t.Run("duplicate after trim ignores surrounding space", func(t *testing.T) {
+		raw := wrap(`  - id: "  foo  "
+    type: required
+    action: demo.action
+    min: 1
+  - id: foo
+    type: forbidden
+    action: demo.action
+`)
+		_, err := Compile(raw)
+		if err == nil || !strings.Contains(err.Error(), `duplicate rule id "foo"`) {
+			t.Fatalf("expected duplicate id error, got: %v", err)
+		}
+	})
+}
+
+func TestCompileAcceptsDistinctRuleIDs(t *testing.T) {
+	raw := wrap(`  - id: r1
+    type: required
+    action: demo.action
+    min: 1
+  - id: r2
+    type: forbidden
+    action: demo.action
+`)
+	if _, err := Compile(raw); err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+}
+
+func TestCompileRejectsWhitespaceOnlyRuleID(t *testing.T) {
+	raw := wrap(`  - id: "   "
+    type: required
+    action: demo.action
+    min: 1
+`)
+	_, err := Compile(raw)
+	if err == nil || !strings.Contains(err.Error(), "rule id is required") {
+		t.Fatalf("expected rule id error, got: %v", err)
+	}
+}
+
+func TestCompileRejectsDuplicateWhitespaceOnlyRuleIDs(t *testing.T) {
+	// Two rules whose raw ids are different but trim to empty: first fails
+	// before duplicate logic; second would be wrong if empty ids slipped through.
+	raw := wrap(`  - id: "  "
+    type: required
+    action: demo.action
+    min: 1
+  - id: "\t"
+    type: forbidden
+    action: demo.action
+`)
+	_, err := Compile(raw)
+	if err == nil || !strings.Contains(err.Error(), "rule id is required") {
+		t.Fatalf("expected rule id error, got: %v", err)
+	}
+}
+
 func TestCompileRejectsCardinalityMutualExclusion(t *testing.T) {
 	raw := []byte(`
 policy_id: tnt_acme.bad
