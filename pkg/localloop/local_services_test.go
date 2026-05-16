@@ -197,6 +197,40 @@ func TestLocalDashboardHandler_healthzAndHome(t *testing.T) {
 	}
 }
 
+func TestLocalDashboard_flowSortOpenBeforeClosed(t *testing.T) {
+	db, err := OpenDB(filepath.Join(t.TempDir(), "sort.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	_, err = db.Exec(`INSERT INTO flows (tenant_id, flow_id, correlation_id, window_closed_at, event_count, flow_merkle_root)
+		VALUES (?, 'flow_closed', 'corr_closed', '2020-01-01T00:00:00Z', 1, 'sha256:aa')`, LocalTenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO flows (tenant_id, flow_id, correlation_id, window_opened_at, window_closed_at, event_count, flow_merkle_root)
+		VALUES (?, 'flow_open', 'corr_open', '2026-01-01T00:00:00Z', NULL, 1, 'sha256:bb')`, LocalTenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := LocalDashboardHandler(db, LocalDashboardLinks{})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("home: %d", rec.Code)
+	}
+	body := rec.Body.String()
+	iOpen := strings.Index(body, "corr_open")
+	iClosed := strings.Index(body, "corr_closed")
+	if iOpen < 0 || iClosed < 0 {
+		t.Fatalf("missing correlations open=%d closed=%d", iOpen, iClosed)
+	}
+	if iOpen > iClosed {
+		t.Fatalf("open flow should sort before closed: open idx=%d closed idx=%d", iOpen, iClosed)
+	}
+}
+
 func mustTestProofTar(t *testing.T, signerPriv ed25519.PrivateKey) []byte {
 	t.Helper()
 	flowJSON, _ := json.Marshal(map[string]interface{}{

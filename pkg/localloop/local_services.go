@@ -415,7 +415,7 @@ func LocalDashboardHandler(db *sql.DB, links LocalDashboardLinks) http.Handler {
 				COALESCE(snapshot_uri, '')
 			FROM flows
 			WHERE tenant_id = ?
-			ORDER BY window_closed_at IS NULL ASC, window_closed_at DESC, flow_id DESC
+			ORDER BY (window_closed_at IS NULL) DESC, window_closed_at DESC, flow_id DESC
 			LIMIT 100`, LocalTenantID)
 		if err != nil {
 			view.Err = err.Error()
