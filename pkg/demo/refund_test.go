@@ -3,9 +3,14 @@ package demo
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
 )
@@ -18,11 +23,13 @@ func TestRunRefundEndToEnd(t *testing.T) {
 	work := t.TempDir()
 	ctx := context.Background()
 	opt := Options{
-		Stdout:      os.Stdout,
-		Stderr:      os.Stderr,
-		HomeDir:     home,
-		WorkDir:     work,
-		OpenBrowser: false,
+		Stdout:         os.Stdout,
+		Stderr:         os.Stderr,
+		HomeDir:        home,
+		WorkDir:        work,
+		OpenBrowser:    false,
+		PrivateKeySeed: deterministicRefundSeed(),
+		FixedTime:      time.Date(2026, 5, 15, 12, 5, 0, 0, time.UTC),
 	}
 	if err := RunRefund(ctx, opt); err != nil {
 		t.Fatal(err)
@@ -45,6 +52,11 @@ func TestRunRefundEndToEnd(t *testing.T) {
 	if hasBundleFinding(vr.Findings, "event.signature_key_unavailable") {
 		t.Fatalf("expected demo bundle to include event public keys, findings=%v", vr.Findings)
 	}
+	gotHash := sha256.Sum256(raw)
+	wantHash := readExpectedBundleHash(t)
+	if got := hex.EncodeToString(gotHash[:]); got != wantHash {
+		t.Fatalf("bundle sha256 mismatch: got %s want %s", got, wantHash)
+	}
 }
 
 func hasBundleFinding(findings []string, needle string) bool {
@@ -54,4 +66,21 @@ func hasBundleFinding(findings []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func deterministicRefundSeed() []byte {
+	seed := make([]byte, ed25519.SeedSize)
+	for i := range seed {
+		seed[i] = byte(i + 1)
+	}
+	return seed
+}
+
+func readExpectedBundleHash(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "refund", "expected-bundle-sha256.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(raw))
 }

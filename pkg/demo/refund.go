@@ -40,6 +40,9 @@ type Options struct {
 	// WorkDir is where demo-refund.proof.tar.zst is written.
 	WorkDir     string
 	OpenBrowser bool
+	// PrivateKeySeed and FixedTime make the demo reproducible for golden tests.
+	PrivateKeySeed []byte
+	FixedTime      time.Time
 }
 
 // RunRefund runs the refund demo: local ingest + flow builder, happy and
@@ -73,9 +76,18 @@ func RunRefund(ctx context.Context, opt Options) error {
 	}
 	defer db.Close()
 
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return fmt.Errorf("generate key: %w", err)
+	var priv ed25519.PrivateKey
+	if len(opt.PrivateKeySeed) > 0 {
+		if len(opt.PrivateKeySeed) != ed25519.SeedSize {
+			return fmt.Errorf("private key seed: want %d bytes, got %d", ed25519.SeedSize, len(opt.PrivateKeySeed))
+		}
+		priv = ed25519.NewKeyFromSeed(opt.PrivateKeySeed)
+	} else {
+		_, generated, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return fmt.Errorf("generate key: %w", err)
+		}
+		priv = generated
 	}
 	instanceID := "inst_demo_refund"
 	regCtx := context.Background()
@@ -192,6 +204,13 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return fmt.Errorf("build flow json: %w", err)
 	}
 
+	restoreClock := func() {}
+	if !opt.FixedTime.IsZero() {
+		fixed := opt.FixedTime.UTC()
+		restoreClock = verifier.SetNowFuncForTest(func() time.Time { return fixed })
+	}
+	defer restoreClock()
+
 	vrun, err := verifier.Verify(flowJSON, policyJSON, nil)
 	if err != nil {
 		return fmt.Errorf("verify: %w", err)
@@ -262,6 +281,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 		PolicyJSON:        policyPretty,
 		RunJSON:           runJSON,
 		PublicKeys:        publicKeys,
+		CreatedAt:         opt.FixedTime,
 	})
 	_ = bf.Close()
 	if err != nil {
