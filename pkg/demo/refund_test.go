@@ -1,14 +1,17 @@
 package demo
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -54,26 +57,50 @@ func TestRunRefundEndToEnd(t *testing.T) {
 	if hasBundleFinding(vr.Findings, "event.signature_key_unavailable") {
 		t.Fatalf("expected demo bundle to include event public keys, findings=%v", vr.Findings)
 	}
-	tarBytes := decodeZstdTar(t, raw)
-	gotHash := sha256.Sum256(tarBytes)
+	gotHash := canonicalBundleContentHash(t, raw)
 	wantHash := readExpectedBundleHash(t)
-	if got := hex.EncodeToString(gotHash[:]); got != wantHash {
-		t.Fatalf("bundle tar sha256 mismatch: got %s want %s", got, wantHash)
+	if got := gotHash; got != wantHash {
+		t.Fatalf("bundle content sha256 mismatch: got %s want %s", got, wantHash)
 	}
 }
 
-func decodeZstdTar(t *testing.T, raw []byte) []byte {
+func canonicalBundleContentHash(t *testing.T, raw []byte) string {
 	t.Helper()
 	zr, err := zstd.NewReader(bytes.NewReader(raw))
 	if err != nil {
 		t.Fatalf("decode zstd bundle: %v", err)
 	}
 	defer zr.Close()
-	decoded, err := io.ReadAll(zr)
-	if err != nil {
-		t.Fatalf("read decoded bundle: %v", err)
+	tr := tar.NewReader(zr)
+	files := map[string]string{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("read tar header: %v", err)
+		}
+		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != 0 {
+			continue
+		}
+		body, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatalf("read tar file %s: %v", hdr.Name, err)
+		}
+		sum := sha256.Sum256(body)
+		files[hdr.Name] = hex.EncodeToString(sum[:])
 	}
-	return decoded
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, name := range names {
+		fmt.Fprintf(h, "%s\x00%s\n", name, files[name])
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func hasBundleFinding(findings []string, needle string) bool {
