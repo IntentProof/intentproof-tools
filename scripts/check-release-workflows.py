@@ -38,7 +38,6 @@ REQUIRED_SNIPPETS = [
     "permissions:",
     "id-token: write",
     "contents: read",
-    "packages: write",
     "when attest_to_rekor=true",
     "dry-run release_ref must be a SemVer tag, refs/heads/*, or a full commit SHA",
     "cosign sign-blob",
