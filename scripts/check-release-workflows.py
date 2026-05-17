@@ -168,6 +168,8 @@ LOCAL_IMAGE_DOCKERFILE_REQUIRED_SNIPPETS = [
     "FROM scratch",
     "SOURCE_DATE_EPOCH",
     "CGO_ENABLED=0",
+    "chown -R 65532:65532 /out/home/nonroot",
+    "COPY --from=build --chown=65532:65532 /out/home/nonroot /home/nonroot",
     "INTENTPROOF_LOCAL_OPEN_BROWSER=0",
     "EXPOSE 9787 9788 9789",
     'VOLUME ["/home/nonroot/.intentproof/local"]',

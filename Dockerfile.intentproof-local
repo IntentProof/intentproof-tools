@@ -20,11 +20,14 @@ RUN SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TA
     -X github.com/intentproof/intentproof-tools/pkg/buildinfo.Commit=${COMMIT} \
     -X github.com/intentproof/intentproof-tools/pkg/buildinfo.Date=${DATE}" \
     -o /out/intentproof ./cmd/intentproof
+RUN mkdir -p /out/home/nonroot/.intentproof/local && \
+    chown -R 65532:65532 /out/home/nonroot
 
 FROM scratch
 ENV HOME=/home/nonroot
 ENV INTENTPROOF_LOCAL_OPEN_BROWSER=0
 COPY --from=build /out/intentproof /intentproof
+COPY --from=build --chown=65532:65532 /out/home/nonroot /home/nonroot
 USER 65532:65532
 EXPOSE 9787 9788 9789
 VOLUME ["/home/nonroot/.intentproof/local"]
