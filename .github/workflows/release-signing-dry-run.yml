@@ -26,6 +26,7 @@ permissions:
 
 jobs:
   build-test-binary:
+    name: "IntentProof Release: Build Test Binary"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +52,7 @@ jobs:
           path: dist/intentproof-verify-dryrun
 
   sign-test-binary:
+    name: "IntentProof Release: Sign Test Binary"
     needs: build-test-binary
     uses: ./.github/workflows/release-build-sign.yml
     with:
@@ -64,6 +66,7 @@ jobs:
       attest_to_rekor: false
 
   build-test-container:
+    name: "IntentProof Release: Build Test Container"
     if: inputs.container_image_ref == ''
     runs-on: ubuntu-latest
     outputs:
@@ -111,6 +114,7 @@ jobs:
           echo "image_ref=ghcr.io/intentproof/test-hello@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   sign-test-container:
+    name: "IntentProof Release: Sign Test Container"
     needs: build-test-container
     if: always() && (inputs.container_image_ref != '' || needs.build-test-container.result == 'success')
     uses: ./.github/workflows/release-build-sign.yml

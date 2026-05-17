@@ -8,6 +8,7 @@ on:
 
 jobs:
   build-test:
+    name: "IntentProof CI: Build and Test"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +47,7 @@ jobs:
         run: python3 ./scripts/check-release-workflows.py
 
   tier-isolation:
+    name: "IntentProof CI: Tier Isolation"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +56,7 @@ jobs:
         run: ./scripts/check-tier-isolation.sh
 
   dco:
+    name: "IntentProof CI: DCO"
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
