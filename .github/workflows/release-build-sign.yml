@@ -61,15 +61,12 @@ on:
       pypi_api_token:
         required: false
 
-permissions:
-  contents: write
-  id-token: write
-  packages: write
-
 jobs:
   validate:
     name: "IntentProof Release: Validate Inputs"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Validate release signing inputs
         env:
@@ -91,13 +88,6 @@ jobs:
               exit 1
               ;;
           esac
-
-          if [[ "$ATTEST_TO_REKOR" == "true" ]]; then
-            if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]]; then
-              echo "attest_to_rekor=true requires GitHub OIDC id-token: write" >&2
-              exit 1
-            fi
-          fi
 
           semver_tag='^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
           dry_run_ref='^(refs/heads/[0-9A-Za-z._/-]+|[0-9a-fA-F]{40})$'
@@ -136,6 +126,9 @@ jobs:
     needs: validate
     if: inputs.artifact_kind == 'binary' || inputs.artifact_kind == 'generic'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -263,6 +256,10 @@ jobs:
     needs: validate
     if: inputs.artifact_kind == 'container'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     steps:
       - uses: sigstore/cosign-installer@v3
       - uses: anchore/sbom-action/download-syft@v0
@@ -293,6 +290,9 @@ jobs:
     needs: validate
     if: inputs.artifact_kind == 'npm'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -320,6 +320,9 @@ jobs:
     needs: validate
     if: inputs.artifact_kind == 'pypi'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
       PYPI_API_TOKEN: ${{ secrets.pypi_api_token }}
     steps:
