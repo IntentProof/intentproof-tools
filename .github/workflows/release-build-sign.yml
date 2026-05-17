@@ -170,7 +170,7 @@ jobs:
               -o "spdx-json=${artifact}.spdx.json"
 
             if [[ -n "$SBOM_EXTRA_PATHS" ]]; then
-              syft packages $SBOM_EXTRA_PATHS \
+              syft packages "$SBOM_EXTRA_PATHS" \
                 -o "spdx-json=${artifact}.source.spdx.json"
             fi
 
