@@ -107,7 +107,7 @@ jobs:
       release_ref: ${{ needs.build.outputs.release_ref }}
       artifact_paths: ${{ needs.build.outputs.artifact_paths }}
       artifact_download_name: release-binary-artifacts
-      artifact_download_path: .
+      artifact_download_path: dist
       sbom_extra_paths: .
       attest_to_rekor: ${{ github.event_name != 'workflow_dispatch' }}
 

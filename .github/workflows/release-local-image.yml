@@ -43,6 +43,7 @@ jobs:
           set -euo pipefail
           short_sha="$(git rev-parse --short=12 HEAD)"
           source_date_epoch="$(git log -1 --format=%ct)"
+          release_date="$(date -u -d "@${source_date_epoch}" +"%Y-%m-%dT%H:%M:%SZ")"
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             release_ref="${{ inputs.release_ref }}"
             release_version="0.0.0-dryrun"
@@ -59,6 +60,7 @@ jobs:
             echo "release_version=${release_version}"
             echo "short_sha=${short_sha}"
             echo "source_date_epoch=${source_date_epoch}"
+            echo "release_date=${release_date}"
             echo "should_push=${should_push}"
             echo "should_sign=${should_push}"
             echo "tags<<EOF"
@@ -88,7 +90,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.release.outputs.release_version }}
             COMMIT=${{ github.sha }}
-            DATE=${{ steps.release.outputs.source_date_epoch }}
+            DATE=${{ steps.release.outputs.release_date }}
             SOURCE_DATE_EPOCH=${{ steps.release.outputs.source_date_epoch }}
           labels: |
             org.opencontainers.image.source=https://github.com/IntentProof/intentproof-tools
