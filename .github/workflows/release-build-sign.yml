@@ -1,0 +1,305 @@
+name: release build sign
+
+on:
+  workflow_call:
+    inputs:
+      artifact_kind:
+        required: true
+        type: string
+      subject_name:
+        required: true
+        type: string
+      release_version:
+        required: true
+        type: string
+      release_ref:
+        required: true
+        type: string
+      artifact_paths:
+        required: false
+        type: string
+        default: ""
+      artifact_download_name:
+        required: false
+        type: string
+        default: ""
+      artifact_download_path:
+        required: false
+        type: string
+        default: "."
+      image_ref:
+        required: false
+        type: string
+        default: ""
+      registry:
+        required: false
+        type: string
+        default: "ghcr.io"
+      npm_package_path:
+        required: false
+        type: string
+        default: ""
+      pypi_dist_dir:
+        required: false
+        type: string
+        default: ""
+      sbom_extra_paths:
+        required: false
+        type: string
+        default: ""
+      attest_to_rekor:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      npm_token:
+        required: false
+      pypi_api_token:
+        required: false
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release signing inputs
+        env:
+          ARTIFACT_KIND: ${{ inputs.artifact_kind }}
+          ATTEST_TO_REKOR: ${{ inputs.attest_to_rekor }}
+          ARTIFACT_PATHS: ${{ inputs.artifact_paths }}
+          IMAGE_REF: ${{ inputs.image_ref }}
+          REGISTRY: ${{ inputs.registry }}
+          NPM_PACKAGE_PATH: ${{ inputs.npm_package_path }}
+          PYPI_DIST_DIR: ${{ inputs.pypi_dist_dir }}
+          RELEASE_REF: ${{ inputs.release_ref }}
+        run: |
+          set -euo pipefail
+
+          case "$ARTIFACT_KIND" in
+            binary|container|npm|pypi|generic) ;;
+            *)
+              echo "artifact_kind must be one of binary, container, npm, pypi, generic" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ "$ATTEST_TO_REKOR" == "true" ]]; then
+            if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]]; then
+              echo "attest_to_rekor=true requires GitHub OIDC id-token: write" >&2
+              exit 1
+            fi
+          fi
+
+          if [[ ! "$RELEASE_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "release_ref must be a SemVer tag ref like refs/tags/v1.2.3" >&2
+            exit 1
+          fi
+
+          case "$ARTIFACT_KIND" in
+            binary|generic)
+              test -n "$ARTIFACT_PATHS" || { echo "artifact_paths is required" >&2; exit 1; }
+              ;;
+            container)
+              test -n "$IMAGE_REF" || { echo "image_ref is required" >&2; exit 1; }
+              test "$REGISTRY" = "ghcr.io" || { echo "only ghcr.io is supported" >&2; exit 1; }
+              if [[ ! "$IMAGE_REF" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
+                echo "image_ref must be digest-bound with @sha256:<digest>" >&2
+                exit 1
+              fi
+              ;;
+            npm)
+              test -n "$NPM_PACKAGE_PATH" || { echo "npm_package_path is required" >&2; exit 1; }
+              ;;
+            pypi)
+              test -n "$PYPI_DIST_DIR" || { echo "pypi_dist_dir is required" >&2; exit 1; }
+              ;;
+          esac
+
+  binary-generic:
+    needs: validate
+    if: inputs.artifact_kind == 'binary' || inputs.artifact_kind == 'generic'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+
+      - uses: actions/download-artifact@v4
+        if: inputs.artifact_download_name != ''
+        with:
+          name: ${{ inputs.artifact_download_name }}
+          path: ${{ inputs.artifact_download_path }}
+
+      - uses: sigstore/cosign-installer@v3
+
+      - uses: anchore/sbom-action/download-syft@v0
+
+      - name: Sign files and generate release metadata
+        env:
+          ARTIFACT_PATHS: ${{ inputs.artifact_paths }}
+          SBOM_EXTRA_PATHS: ${{ inputs.sbom_extra_paths }}
+          SUBJECT_NAME: ${{ inputs.subject_name }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          ATTEST_TO_REKOR: ${{ inputs.attest_to_rekor }}
+        run: |
+          set -euo pipefail
+          tlog_args=()
+          if [[ "$ATTEST_TO_REKOR" != "true" ]]; then
+            tlog_args+=(--tlog-upload=false)
+          fi
+
+          mkdir -p release-attestations
+          : > release-attestations/SHA256SUMS
+
+          while IFS= read -r artifact; do
+            [[ -z "$artifact" ]] && continue
+            test -f "$artifact" || { echo "artifact not found: $artifact" >&2; exit 1; }
+
+            sha256sum "$artifact" >> release-attestations/SHA256SUMS
+            cosign sign-blob --yes \
+              "${tlog_args[@]}" \
+              --bundle "${artifact}.sigstore.json" \
+              --output-signature "${artifact}.sig" \
+              "$artifact"
+
+            syft packages "file:${artifact}" \
+              -o "spdx-json=${artifact}.spdx.json"
+
+            if [[ -n "$SBOM_EXTRA_PATHS" ]]; then
+              syft packages $SBOM_EXTRA_PATHS \
+                -o "spdx-json=${artifact}.source.spdx.json"
+            fi
+
+            cosign attest-blob --yes \
+              "${tlog_args[@]}" \
+              --type spdxjson \
+              --predicate "${artifact}.spdx.json" \
+              --bundle "${artifact}.sbom.sigstore.json" \
+              "$artifact"
+
+            cat > "${artifact}.intoto.json" <<EOF
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [{"name": "${SUBJECT_NAME}", "digest": {"sha256": "$(sha256sum "$artifact" | awk '{print $1}')"}}],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://github.com/IntentProof/release-build-sign",
+                "externalParameters": {
+                  "releaseVersion": "${RELEASE_VERSION}",
+                  "artifactPath": "${artifact}"
+                }
+              },
+              "runDetails": {
+                "builder": {"id": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"},
+                "metadata": {"invocationId": "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"}
+              }
+            }
+          }
+          EOF
+            cosign attest-blob --yes \
+              "${tlog_args[@]}" \
+              --type slsaprovenance \
+              --predicate "${artifact}.intoto.json" \
+              --bundle "${artifact}.intoto.sigstore.json" \
+              "$artifact"
+          done <<< "$ARTIFACT_PATHS"
+
+          cosign sign-blob --yes \
+            "${tlog_args[@]}" \
+            --bundle release-attestations/SHA256SUMS.sigstore.json \
+            --output-signature release-attestations/SHA256SUMS.sig \
+            release-attestations/SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-signing-metadata
+          path: |
+            **/*.sig
+            **/*.sigstore.json
+            **/*.spdx.json
+            **/*.intoto.json
+            release-attestations/SHA256SUMS
+
+  container:
+    needs: validate
+    if: inputs.artifact_kind == 'container'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: sigstore/cosign-installer@v3
+      - uses: anchore/sbom-action/download-syft@v0
+
+      - name: Sign container image and attest SBOM
+        env:
+          IMAGE_REF: ${{ inputs.image_ref }}
+          ATTEST_TO_REKOR: ${{ inputs.attest_to_rekor }}
+        run: |
+          set -euo pipefail
+          tlog_args=()
+          if [[ "$ATTEST_TO_REKOR" != "true" ]]; then
+            tlog_args+=(--tlog-upload=false)
+          fi
+
+          cosign sign --yes "${tlog_args[@]}" "$IMAGE_REF"
+          syft packages "$IMAGE_REF" -o spdx-json=image.spdx.json
+          cosign attest --yes "${tlog_args[@]}" --type spdxjson --predicate image.spdx.json "$IMAGE_REF"
+
+  npm:
+    needs: validate
+    if: inputs.artifact_kind == 'npm'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Pack and publish with npm provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
+          NPM_PACKAGE_PATH: ${{ inputs.npm_package_path }}
+        run: |
+          set -euo pipefail
+          cd "$NPM_PACKAGE_PATH"
+          npm pack
+          if [[ -n "${NODE_AUTH_TOKEN:-}" ]]; then
+            npm publish --provenance
+          else
+            echo "npm_token not provided; packed artifact only."
+          fi
+
+  pypi:
+    needs: validate
+    if: inputs.artifact_kind == 'pypi'
+    runs-on: ubuntu-latest
+    env:
+      PYPI_API_TOKEN: ${{ secrets.pypi_api_token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Publish Python distributions with trusted publishing
+        env:
+          PYPI_DIST_DIR: ${{ inputs.pypi_dist_dir }}
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build twine
+          test -d "$PYPI_DIST_DIR"
+          twine check "$PYPI_DIST_DIR"/*
+          echo "PyPI trusted publishing is expected to attach PEP 740 attestations."
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        if: env.PYPI_API_TOKEN != ''
+        with:
+          packages-dir: ${{ inputs.pypi_dist_dir }}
+          password: ${{ secrets.pypi_api_token }}
+          attestations: true
