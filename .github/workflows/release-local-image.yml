@@ -1,0 +1,115 @@
+name: release local image
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Git ref to build for a dry run.
+        required: true
+        default: refs/heads/main
+        type: string
+      publish_image:
+        description: Push the dry-run image to GHCR so the signing path can run.
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  build:
+    name: "IntentProof Release: Build Local Image"
+    runs-on: ubuntu-latest
+    outputs:
+      image_ref: ${{ steps.image-ref.outputs.image_ref }}
+      release_ref: ${{ steps.release.outputs.release_ref }}
+      release_version: ${{ steps.release.outputs.release_version }}
+      should_sign: ${{ steps.release.outputs.should_sign }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve image metadata
+        id: release
+        run: |
+          set -euo pipefail
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          source_date_epoch="$(git log -1 --format=%ct)"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_ref="${{ inputs.release_ref }}"
+            release_version="0.0.0-dryrun"
+            should_push="${{ inputs.publish_image }}"
+          else
+            release_ref="${GITHUB_REF}"
+            release_version="${GITHUB_REF_NAME#v}"
+            should_push="true"
+          fi
+
+          image="ghcr.io/intentproof/intentproof-local"
+          {
+            echo "release_ref=${release_ref}"
+            echo "release_version=${release_version}"
+            echo "short_sha=${short_sha}"
+            echo "source_date_epoch=${source_date_epoch}"
+            echo "should_push=${should_push}"
+            echo "should_sign=${should_push}"
+            echo "tags<<EOF"
+            echo "${image}:${release_version}"
+            echo "${image}:${release_version}-${short_sha}"
+            echo "${image}:sha-${short_sha}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: steps.release.outputs.should_push == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          file: Dockerfile.intentproof-local
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.release.outputs.should_push == 'true' }}
+          tags: ${{ steps.release.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.release.outputs.release_version }}
+            COMMIT=${{ github.sha }}
+            DATE=${{ steps.release.outputs.source_date_epoch }}
+            SOURCE_DATE_EPOCH=${{ steps.release.outputs.source_date_epoch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/IntentProof/intentproof-tools
+            org.opencontainers.image.version=${{ steps.release.outputs.release_version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Export digest-bound image reference
+        id: image-ref
+        if: steps.release.outputs.should_push == 'true'
+        run: |
+          set -euo pipefail
+          echo "image_ref=ghcr.io/intentproof/intentproof-local@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+  sign:
+    name: "IntentProof Release: Sign Local Image"
+    needs: build
+    if: needs.build.outputs.should_sign == 'true'
+    uses: ./.github/workflows/release-container-sign.yml
+    with:
+      subject_name: intentproof-local
+      release_version: ${{ needs.build.outputs.release_version }}
+      release_ref: ${{ needs.build.outputs.release_ref }}
+      image_ref: ${{ needs.build.outputs.image_ref }}
+      attest_to_rekor: ${{ github.event_name != 'workflow_dispatch' }}

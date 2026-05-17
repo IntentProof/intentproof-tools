@@ -11,9 +11,18 @@ a tiny `ghcr.io/intentproof/test-hello` image, then signs and attests that
 image by digest through the container path. A digest-bound `container_image_ref`
 can be provided to sign an existing image instead.
 
+`release-binaries.yml` builds the released `intentproof` and
+`intentproof-verify` binaries with GoReleaser for Linux, macOS, and Windows,
+uploads the archives and `SHA256SUMS` to GitHub Releases, and then calls the
+reusable signing workflow for the release archives.
+
+`release-local-image.yml` builds and pushes the multi-arch
+`ghcr.io/intentproof/intentproof-local` image for Linux amd64 and arm64, then
+calls the container signing workflow against the digest-bound image reference.
+
 ## Required Inputs
 
-- `artifact_kind`: `binary`, `container`, `npm`, `pypi`, or `generic`.
+- `artifact_kind`: `binary`, `npm`, `pypi`, or `generic`.
 - `subject_name`: the human-readable artifact name used in certificate
   subjects and provenance metadata.
 - `release_version`: SemVer string for the release.
@@ -25,7 +34,8 @@ can be provided to sign an existing image instead.
   If files were produced by an earlier job in the same workflow run, set
   `artifact_download_name` and optionally `artifact_download_path` so the
   reusable workflow downloads them before signing.
-- `container`: set `image_ref` to a digest-bound GHCR reference such as
+- `container`: call `release-container-sign.yml` with `image_ref` set to a
+  digest-bound GHCR reference such as
   `ghcr.io/intentproof/ingest@sha256:<digest>`.
 - `npm`: set `npm_package_path`; provide `npm_token` only for real publish.
 - `pypi`: set `pypi_dist_dir`. To build from source, optionally set
@@ -35,19 +45,22 @@ can be provided to sign an existing image instead.
   trusted publishing is the default publish path.
 
 The workflow fails closed when `attest_to_rekor: true` and the GitHub OIDC
-token is unavailable. Callers must grant:
+token is unavailable. Non-container callers must grant:
 
 ```yaml
 permissions:
   contents: write
   id-token: write
-  packages: write
 ```
+
+Container callers also need `packages: write` so the signing workflow can attach
+signature and attestation artifacts to GHCR.
 
 ## Verification Shape
 
 Binary and generic artifacts produce detached Cosign signatures, SPDX SBOMs,
-SLSA provenance predicates, Sigstore bundles, and a signed `SHA256SUMS` file.
+SLSA provenance predicates as `.intoto.jsonl`, Sigstore bundles, and a signed
+`SHA256SUMS` file.
 Container artifacts are signed and SBOM-attested by digest. npm packages use
 native npm provenance. PyPI packages use trusted publishing and PEP 740
 attestations.

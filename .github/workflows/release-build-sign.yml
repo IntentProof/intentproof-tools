@@ -147,7 +147,10 @@ jobs:
             [[ -z "$artifact" ]] && continue
             test -f "$artifact" || { echo "artifact not found: $artifact" >&2; exit 1; }
 
-            sha256sum "$artifact" >> release-attestations/SHA256SUMS
+            (
+              cd "$(dirname "$artifact")"
+              sha256sum "$(basename "$artifact")"
+            ) >> release-attestations/SHA256SUMS
             cosign sign-blob --yes \
               "${tlog_args[@]}" \
               --bundle "${artifact}.sigstore.json" \
@@ -204,15 +207,15 @@ jobs:
                   }
               ],
           }
-          Path(f"{artifact_path}.intoto.json").write_text(
-              json.dumps(predicate, indent=2) + "\n",
+          Path(f"{artifact_path}.intoto.jsonl").write_text(
+              json.dumps(predicate, separators=(",", ":")) + "\n",
               encoding="utf-8",
           )
           PY
             cosign attest-blob --yes \
               "${tlog_args[@]}" \
               --type slsaprovenance \
-              --predicate "${artifact}.intoto.json" \
+              --predicate "${artifact}.intoto.jsonl" \
               --bundle "${artifact}.intoto.sigstore.json" \
               "$artifact"
           done <<< "$ARTIFACT_PATHS"
@@ -230,7 +233,7 @@ jobs:
             **/*.sig
             **/*.sigstore.json
             **/*.spdx.json
-            **/*.intoto.json
+            **/*.intoto.jsonl
             release-attestations/SHA256SUMS
 
   npm:

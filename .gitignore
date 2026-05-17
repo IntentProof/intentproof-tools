@@ -2,6 +2,7 @@ coverage.out
 *.test
 *.out
 .DS_Store
+dist/
 
 # go build -o at repo root
 /intentproof

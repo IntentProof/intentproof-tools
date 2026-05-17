@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"io"
+
+	"github.com/intentproof/intentproof-tools/pkg/buildinfo"
 )
 
 func writeUsage(stderr io.Writer, usage string) {
@@ -20,6 +22,9 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	switch args[0] {
+	case "--version", "version":
+		fmt.Fprintln(stdout, buildinfo.String("intentproof"))
+		return 0
 	case "demo":
 		return runDemo(args[1:], stdout, stderr)
 	case "local":

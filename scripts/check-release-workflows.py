@@ -20,6 +20,27 @@ CONTAINER_WORKFLOW = Path(
         ROOT / ".github" / "workflows" / "release-container-sign.yml",
     )
 )
+RELEASE_BINARIES_WORKFLOW = Path(
+    os.environ.get(
+        "INTENTPROOF_RELEASE_BINARIES_WORKFLOW",
+        ROOT / ".github" / "workflows" / "release-binaries.yml",
+    )
+)
+RELEASE_LOCAL_IMAGE_WORKFLOW = Path(
+    os.environ.get(
+        "INTENTPROOF_RELEASE_LOCAL_IMAGE_WORKFLOW",
+        ROOT / ".github" / "workflows" / "release-local-image.yml",
+    )
+)
+GORELEASER_CONFIG = Path(
+    os.environ.get("INTENTPROOF_GORELEASER_CONFIG", ROOT / ".goreleaser.yaml")
+)
+LOCAL_IMAGE_DOCKERFILE = Path(
+    os.environ.get(
+        "INTENTPROOF_LOCAL_IMAGE_DOCKERFILE",
+        ROOT / "Dockerfile.intentproof-local",
+    )
+)
 DRY_RUN_WORKFLOW = Path(
     os.environ.get(
         "INTENTPROOF_RELEASE_DRY_RUN_WORKFLOW",
@@ -50,7 +71,8 @@ REQUIRED_SNIPPETS = [
     "cosign attest-blob",
     '"builder":',
     '"materials":',
-    "json.dumps(predicate, indent=2)",
+    "json.dumps(predicate, separators=(\",\", \":\"))",
+    ".intoto.jsonl",
     "python -m build --outdir",
     "ARTIFACT_DOWNLOAD_NAME",
     "syft packages",
@@ -92,6 +114,60 @@ DRY_RUN_REQUIRED_SNIPPETS = [
     "artifact_download_name: release-dry-run-binary",
     "container_image_ref",
     "attest_to_rekor: false",
+]
+
+RELEASE_BINARIES_REQUIRED_SNIPPETS = [
+    "on:",
+    "tags:",
+    '"v*"',
+    "goreleaser/goreleaser-action@v6",
+    "SOURCE_DATE_EPOCH",
+    "release-binary-artifacts",
+    "uses: ./.github/workflows/release-build-sign.yml",
+    "artifact_kind: binary",
+    "attest_to_rekor: ${{ github.event_name != 'workflow_dispatch' }}",
+    "release-signing-metadata",
+    "gh release upload",
+]
+
+RELEASE_LOCAL_IMAGE_REQUIRED_SNIPPETS = [
+    "on:",
+    "tags:",
+    '"v*"',
+    "docker/setup-buildx-action@v3",
+    "docker/build-push-action@v6",
+    "Dockerfile.intentproof-local",
+    "linux/amd64,linux/arm64",
+    "ghcr.io/intentproof/intentproof-local",
+    "sha-",
+    "uses: ./.github/workflows/release-container-sign.yml",
+    "attest_to_rekor: ${{ github.event_name != 'workflow_dispatch' }}",
+]
+
+GORELEASER_REQUIRED_SNIPPETS = [
+    "version: 2",
+    "project_name: intentproof-tools",
+    "CGO_ENABLED=0",
+    "./cmd/intentproof",
+    "./cmd/intentproof-verify",
+    "linux",
+    "darwin",
+    "windows",
+    "arm64",
+    "amd64",
+    "SHA256SUMS",
+    "format_overrides:",
+]
+
+LOCAL_IMAGE_DOCKERFILE_REQUIRED_SNIPPETS = [
+    "golang:1.25.0-alpine@sha256:",
+    "FROM scratch",
+    "SOURCE_DATE_EPOCH",
+    "CGO_ENABLED=0",
+    "INTENTPROOF_LOCAL_OPEN_BROWSER=0",
+    "EXPOSE 9787 9788 9789",
+    'VOLUME ["/home/nonroot/.intentproof/local"]',
+    'ENTRYPOINT ["/intentproof", "local"]',
 ]
 
 
@@ -166,6 +242,35 @@ def main() -> int:
                 file=sys.stderr,
             )
         return 1
+
+    for path, snippets, label in (
+        (
+            RELEASE_BINARIES_WORKFLOW,
+            RELEASE_BINARIES_REQUIRED_SNIPPETS,
+            "release binaries workflow",
+        ),
+        (
+            RELEASE_LOCAL_IMAGE_WORKFLOW,
+            RELEASE_LOCAL_IMAGE_REQUIRED_SNIPPETS,
+            "release local image workflow",
+        ),
+        (GORELEASER_CONFIG, GORELEASER_REQUIRED_SNIPPETS, "GoReleaser config"),
+        (
+            LOCAL_IMAGE_DOCKERFILE,
+            LOCAL_IMAGE_DOCKERFILE_REQUIRED_SNIPPETS,
+            "intentproof-local Dockerfile",
+        ),
+    ):
+        checked_text = read_workflow(path)
+        if checked_text is None:
+            return 1
+        checked_missing = [
+            snippet for snippet in snippets if snippet not in checked_text
+        ]
+        if checked_missing:
+            for snippet in checked_missing:
+                print(f"missing required {label} snippet: {snippet}", file=sys.stderr)
+            return 1
 
     return 0
 
