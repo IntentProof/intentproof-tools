@@ -37,9 +37,8 @@ REQUIRED_SNIPPETS = [
     "attest_to_rekor:",
     "permissions:",
     "id-token: write",
-    "contents: write",
+    "contents: read",
     "packages: write",
-    "attest_to_rekor=true requires GitHub OIDC id-token: write",
     "when attest_to_rekor=true",
     "dry-run release_ref must be a SemVer tag, refs/heads/*, or a full commit SHA",
     "cosign sign-blob",
@@ -92,6 +91,15 @@ def main() -> int:
     if missing:
         for snippet in missing:
             print(f"missing required workflow snippet: {snippet}", file=sys.stderr)
+        return 1
+
+    jobs_index = text.find("\njobs:")
+    permissions_index = text.find("\npermissions:")
+    if permissions_index != -1 and permissions_index < jobs_index:
+        print(
+            "release workflow permissions must be scoped to jobs, not workflow-wide",
+            file=sys.stderr,
+        )
         return 1
 
     for kind in ("binary", "container", "npm", "pypi", "generic"):
