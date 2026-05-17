@@ -1,0 +1,75 @@
+name: release signing dry run
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: SemVer version to place in dry-run attestations.
+        required: true
+        default: 0.0.0-dryrun
+        type: string
+      release_ref:
+        description: Git ref to check out for the dry run.
+        required: true
+        default: refs/heads/main
+        type: string
+      container_image_ref:
+        description: Optional digest-bound GHCR image to sign in dry-run mode.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  build-test-binary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build dry-run verifier binary
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          CGO_ENABLED=0 go build -trimpath \
+            -ldflags="-s -w" \
+            -o dist/intentproof-verify-dryrun \
+            ./cmd/intentproof-verify
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run-binary
+          path: dist/intentproof-verify-dryrun
+
+  sign-test-binary:
+    needs: build-test-binary
+    uses: ./.github/workflows/release-build-sign.yml
+    with:
+      artifact_kind: binary
+      subject_name: intentproof-verify-dryrun
+      release_version: ${{ inputs.release_version }}
+      release_ref: ${{ inputs.release_ref }}
+      artifact_paths: dist/intentproof-verify-dryrun
+      artifact_download_name: release-dry-run-binary
+      artifact_download_path: dist
+      attest_to_rekor: false
+
+  sign-test-container:
+    if: inputs.container_image_ref != ''
+    uses: ./.github/workflows/release-build-sign.yml
+    with:
+      artifact_kind: container
+      subject_name: ${{ inputs.container_image_ref }}
+      release_version: ${{ inputs.release_version }}
+      release_ref: ${{ inputs.release_ref }}
+      image_ref: ${{ inputs.container_image_ref }}
+      attest_to_rekor: false

@@ -14,6 +14,12 @@ WORKFLOW = Path(
         ROOT / ".github" / "workflows" / "release-build-sign.yml",
     )
 )
+DRY_RUN_WORKFLOW = Path(
+    os.environ.get(
+        "INTENTPROOF_RELEASE_DRY_RUN_WORKFLOW",
+        ROOT / ".github" / "workflows" / "release-signing-dry-run.yml",
+    )
+)
 
 
 REQUIRED_SNIPPETS = [
@@ -34,6 +40,8 @@ REQUIRED_SNIPPETS = [
     "contents: write",
     "packages: write",
     "attest_to_rekor=true requires GitHub OIDC id-token: write",
+    "when attest_to_rekor=true",
+    "dry-run release_ref must be a SemVer tag, refs/heads/*, or a full commit SHA",
     "cosign sign-blob",
     "--tlog-upload=false",
     "cosign attest-blob",
@@ -48,17 +56,30 @@ REQUIRED_SNIPPETS = [
     "PyPI trusted publishing is expected to attach PEP 740 attestations.",
 ]
 
+DRY_RUN_REQUIRED_SNIPPETS = [
+    "workflow_dispatch:",
+    "default: refs/heads/main",
+    "CGO_ENABLED=0 go build",
+    "release-dry-run-binary",
+    "uses: ./.github/workflows/release-build-sign.yml",
+    "artifact_kind: binary",
+    "artifact_download_name: release-dry-run-binary",
+    "artifact_kind: container",
+    "container_image_ref",
+    "attest_to_rekor: false",
+]
 
-def read_workflow() -> Optional[str]:
+
+def read_workflow(path: Path) -> Optional[str]:
     try:
-        return WORKFLOW.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        print(f"release workflow not found: {WORKFLOW}", file=sys.stderr)
+        print(f"release workflow not found: {path}", file=sys.stderr)
         return None
 
 
 def main() -> int:
-    text = read_workflow()
+    text = read_workflow(WORKFLOW)
     if text is None:
         return 1
 
@@ -72,6 +93,23 @@ def main() -> int:
         if kind not in text:
             print(f"artifact kind {kind!r} is not represented", file=sys.stderr)
             return 1
+
+    dry_run_text = read_workflow(DRY_RUN_WORKFLOW)
+    if dry_run_text is None:
+        return 1
+
+    dry_run_missing = [
+        snippet
+        for snippet in DRY_RUN_REQUIRED_SNIPPETS
+        if snippet not in dry_run_text
+    ]
+    if dry_run_missing:
+        for snippet in dry_run_missing:
+            print(
+                f"missing required dry-run workflow snippet: {snippet}",
+                file=sys.stderr,
+            )
+        return 1
 
     return 0
 

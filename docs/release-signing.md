@@ -4,6 +4,11 @@
 artifacts. Repositories call it from release-specific workflows and pass the
 artifact metadata for one artifact kind at a time.
 
+`release-signing-dry-run.yml` is this repository's caller workflow. It builds a
+test `intentproof-verify` binary, downloads that artifact into the reusable
+workflow, and signs it with `attest_to_rekor: false`. It can also exercise the
+container signing path when a digest-bound `container_image_ref` is provided.
+
 ## Required Inputs
 
 - `artifact_kind`: `binary`, `container`, `npm`, `pypi`, or `generic`.
@@ -44,6 +49,14 @@ SLSA provenance predicates, Sigstore bundles, and a signed `SHA256SUMS` file.
 Container artifacts are signed and SBOM-attested by digest. npm packages use
 native npm provenance. PyPI packages use trusted publishing and PEP 740
 attestations.
+
+For a dry run, dispatch `release signing dry run`; it defaults to
+`refs/heads/main` and sets `attest_to_rekor: false`. Leave
+`container_image_ref` empty to exercise only the downloaded binary-artifact
+path, or pass a digest-bound GHCR image such as
+`ghcr.io/intentproof/test-hello@sha256:<digest>` to exercise container signing.
+Rekor-backed releases still require a SemVer tag ref such as
+`refs/tags/v1.2.3`.
 
 Customers verify released blobs with the IntentProof GitHub Actions identity:
 

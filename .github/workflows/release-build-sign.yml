@@ -98,8 +98,15 @@ jobs:
             fi
           fi
 
-          if [[ ! "$RELEASE_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-            echo "release_ref must be a SemVer tag ref like refs/tags/v1.2.3" >&2
+          semver_tag='^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          dry_run_ref='^(refs/heads/[0-9A-Za-z._/-]+|[0-9a-fA-F]{40})$'
+          if [[ "$ATTEST_TO_REKOR" == "true" ]]; then
+            if [[ ! "$RELEASE_REF" =~ $semver_tag ]]; then
+              echo "release_ref must be a SemVer tag ref like refs/tags/v1.2.3 when attest_to_rekor=true" >&2
+              exit 1
+            fi
+          elif [[ ! "$RELEASE_REF" =~ $semver_tag && ! "$RELEASE_REF" =~ $dry_run_ref ]]; then
+            echo "dry-run release_ref must be a SemVer tag, refs/heads/*, or a full commit SHA" >&2
             exit 1
           fi
 
