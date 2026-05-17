@@ -181,7 +181,7 @@ jobs:
               --bundle "${artifact}.sbom.sigstore.json" \
               "$artifact"
 
-            cat > "${artifact}.intoto.json" <<EOF
+            cat > "${artifact}.intoto.json" <<-EOF
           {
             "_type": "https://in-toto.io/Statement/v1",
             "subject": [{"name": "${SUBJECT_NAME}", "digest": {"sha256": "$(sha256sum "$artifact" | awk '{print $1}')"}}],

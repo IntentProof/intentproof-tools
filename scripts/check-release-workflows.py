@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """Lightweight structural checks for release workflow contracts."""
 
+import os
 from pathlib import Path
 import sys
+from typing import Optional
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github" / "workflows" / "release-build-sign.yml"
+WORKFLOW = Path(
+    os.environ.get(
+        "INTENTPROOF_RELEASE_WORKFLOW",
+        ROOT / ".github" / "workflows" / "release-build-sign.yml",
+    )
+)
 
 
 REQUIRED_SNIPPETS = [
@@ -30,14 +37,26 @@ REQUIRED_SNIPPETS = [
     "--tlog-upload=false",
     "cosign attest-blob",
     "cosign sign --yes",
+    "<<-EOF",
     "syft packages",
     "npm publish --provenance",
     "PyPI trusted publishing is expected to attach PEP 740 attestations.",
 ]
 
 
+def read_workflow() -> Optional[str]:
+    try:
+        return WORKFLOW.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        print(f"release workflow not found: {WORKFLOW}", file=sys.stderr)
+        return None
+
+
 def main() -> int:
-    text = WORKFLOW.read_text()
+    text = read_workflow()
+    if text is None:
+        return 1
+
     missing = [snippet for snippet in REQUIRED_SNIPPETS if snippet not in text]
     if missing:
         for snippet in missing:
