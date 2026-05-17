@@ -68,6 +68,7 @@ permissions:
 
 jobs:
   validate:
+    name: "IntentProof Release: Validate Inputs"
     runs-on: ubuntu-latest
     steps:
       - name: Validate release signing inputs
@@ -131,6 +132,7 @@ jobs:
           esac
 
   binary-generic:
+    name: "IntentProof Release: Sign Binary or Generic Artifact"
     needs: validate
     if: inputs.artifact_kind == 'binary' || inputs.artifact_kind == 'generic'
     runs-on: ubuntu-latest
@@ -257,6 +259,7 @@ jobs:
             release-attestations/SHA256SUMS
 
   container:
+    name: "IntentProof Release: Sign Container Image"
     needs: validate
     if: inputs.artifact_kind == 'container'
     runs-on: ubuntu-latest
@@ -286,6 +289,7 @@ jobs:
           cosign attest --yes "${tlog_args[@]}" --type spdxjson --predicate image.spdx.json "$IMAGE_REF"
 
   npm:
+    name: "IntentProof Release: Pack and Publish npm Package"
     needs: validate
     if: inputs.artifact_kind == 'npm'
     runs-on: ubuntu-latest
@@ -312,6 +316,7 @@ jobs:
           fi
 
   pypi:
+    name: "IntentProof Release: Build and Publish Python Distribution"
     needs: validate
     if: inputs.artifact_kind == 'pypi'
     runs-on: ubuntu-latest
