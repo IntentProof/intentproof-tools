@@ -21,7 +21,11 @@ artifact metadata for one artifact kind at a time.
 - `container`: set `image_ref` to a digest-bound GHCR reference such as
   `ghcr.io/intentproof/ingest@sha256:<digest>`.
 - `npm`: set `npm_package_path`; provide `npm_token` only for real publish.
-- `pypi`: set `pypi_dist_dir`; PyPI trusted publishing owns the upload token.
+- `pypi`: set `pypi_dist_dir`. To build from source, optionally set
+  `pypi_package_path` if the package is not at the repository root. To publish
+  prebuilt distributions, set `artifact_download_name` and the workflow will
+  download that artifact into `pypi_dist_dir` before `twine check`. PyPI
+  trusted publishing is the default publish path.
 
 The workflow fails closed when `attest_to_rekor: true` and the GitHub OIDC
 token is unavailable. Callers must grant:

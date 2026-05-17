@@ -43,6 +43,10 @@ on:
         required: false
         type: string
         default: ""
+      pypi_package_path:
+        required: false
+        type: string
+        default: "."
       sbom_extra_paths:
         required: false
         type: string
@@ -319,15 +323,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Publish Python distributions with trusted publishing
+
+      - uses: actions/download-artifact@v4
+        if: inputs.artifact_download_name != ''
+        with:
+          name: ${{ inputs.artifact_download_name }}
+          path: ${{ inputs.pypi_dist_dir }}
+
+      - name: Build and check Python distributions
         env:
+          ARTIFACT_DOWNLOAD_NAME: ${{ inputs.artifact_download_name }}
+          PYPI_PACKAGE_PATH: ${{ inputs.pypi_package_path }}
           PYPI_DIST_DIR: ${{ inputs.pypi_dist_dir }}
         run: |
           set -euo pipefail
           python -m pip install --upgrade build twine
+          if [[ -z "$ARTIFACT_DOWNLOAD_NAME" ]]; then
+            rm -rf "$PYPI_DIST_DIR"
+            python -m build --outdir "$PYPI_DIST_DIR" "$PYPI_PACKAGE_PATH"
+          fi
           test -d "$PYPI_DIST_DIR"
           twine check "$PYPI_DIST_DIR"/*
           echo "PyPI trusted publishing is expected to attach PEP 740 attestations."
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        if: env.PYPI_API_TOKEN == ''
+        with:
+          packages-dir: ${{ inputs.pypi_dist_dir }}
+          attestations: true
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         if: env.PYPI_API_TOKEN != ''
