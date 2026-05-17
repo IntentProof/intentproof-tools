@@ -14,6 +14,12 @@ WORKFLOW = Path(
         ROOT / ".github" / "workflows" / "release-build-sign.yml",
     )
 )
+CONTAINER_WORKFLOW = Path(
+    os.environ.get(
+        "INTENTPROOF_RELEASE_CONTAINER_WORKFLOW",
+        ROOT / ".github" / "workflows" / "release-container-sign.yml",
+    )
+)
 DRY_RUN_WORKFLOW = Path(
     os.environ.get(
         "INTENTPROOF_RELEASE_DRY_RUN_WORKFLOW",
@@ -30,7 +36,6 @@ REQUIRED_SNIPPETS = [
     "release_ref:",
     "artifact_paths:",
     "artifact_download_name:",
-    "image_ref:",
     "npm_package_path:",
     "pypi_dist_dir:",
     "pypi_package_path:",
@@ -38,15 +43,11 @@ REQUIRED_SNIPPETS = [
     "permissions:",
     "id-token: write",
     "contents: read",
-    "packages: write",
     "when attest_to_rekor=true",
     "dry-run release_ref must be a SemVer tag, refs/heads/*, or a full commit SHA",
     "cosign sign-blob",
     "--tlog-upload=false",
     "cosign attest-blob",
-    "cosign sign --yes",
-    "docker/login-action@v3",
-    "password: ${{ github.token }}",
     '"builder":',
     '"materials":',
     "json.dumps(predicate, indent=2)",
@@ -55,6 +56,26 @@ REQUIRED_SNIPPETS = [
     "syft packages",
     "npm publish --provenance",
     "PyPI trusted publishing is expected to attach PEP 740 attestations.",
+]
+
+CONTAINER_REQUIRED_SNIPPETS = [
+    "workflow_call:",
+    "subject_name:",
+    "release_version:",
+    "release_ref:",
+    "image_ref:",
+    "registry:",
+    "attest_to_rekor:",
+    "packages: write",
+    "id-token: write",
+    "contents: read",
+    "when attest_to_rekor=true",
+    "image_ref must be digest-bound with @sha256:<digest>",
+    "docker/login-action@v3",
+    "password: ${{ github.token }}",
+    "cosign sign --yes",
+    "cosign attest --yes",
+    "syft packages",
 ]
 
 DRY_RUN_REQUIRED_SNIPPETS = [
@@ -66,9 +87,9 @@ DRY_RUN_REQUIRED_SNIPPETS = [
     "ghcr.io/intentproof/test-hello:dryrun-",
     "image_ref=ghcr.io/intentproof/test-hello@",
     "uses: ./.github/workflows/release-build-sign.yml",
+    "uses: ./.github/workflows/release-container-sign.yml",
     "artifact_kind: binary",
     "artifact_download_name: release-dry-run-binary",
-    "artifact_kind: container",
     "container_image_ref",
     "attest_to_rekor: false",
 ]
@@ -102,10 +123,32 @@ def main() -> int:
         )
         return 1
 
-    for kind in ("binary", "container", "npm", "pypi", "generic"):
+    if "packages: write" in text:
+        print(
+            "non-container release workflow must not request packages: write",
+            file=sys.stderr,
+        )
+        return 1
+
+    for kind in ("binary", "npm", "pypi", "generic"):
         if kind not in text:
             print(f"artifact kind {kind!r} is not represented", file=sys.stderr)
             return 1
+
+    container_text = read_workflow(CONTAINER_WORKFLOW)
+    if container_text is None:
+        return 1
+
+    container_missing = [
+        snippet for snippet in CONTAINER_REQUIRED_SNIPPETS if snippet not in container_text
+    ]
+    if container_missing:
+        for snippet in container_missing:
+            print(
+                f"missing required container workflow snippet: {snippet}",
+                file=sys.stderr,
+            )
+        return 1
 
     dry_run_text = read_workflow(DRY_RUN_WORKFLOW)
     if dry_run_text is None:
