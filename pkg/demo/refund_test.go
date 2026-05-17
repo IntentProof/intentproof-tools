@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestRunRefundEndToEnd(t *testing.T) {
@@ -52,11 +54,26 @@ func TestRunRefundEndToEnd(t *testing.T) {
 	if hasBundleFinding(vr.Findings, "event.signature_key_unavailable") {
 		t.Fatalf("expected demo bundle to include event public keys, findings=%v", vr.Findings)
 	}
-	gotHash := sha256.Sum256(raw)
+	tarBytes := decodeZstdTar(t, raw)
+	gotHash := sha256.Sum256(tarBytes)
 	wantHash := readExpectedBundleHash(t)
 	if got := hex.EncodeToString(gotHash[:]); got != wantHash {
-		t.Fatalf("bundle sha256 mismatch: got %s want %s", got, wantHash)
+		t.Fatalf("bundle tar sha256 mismatch: got %s want %s", got, wantHash)
 	}
+}
+
+func decodeZstdTar(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	zr, err := zstd.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("decode zstd bundle: %v", err)
+	}
+	defer zr.Close()
+	decoded, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatalf("read decoded bundle: %v", err)
+	}
+	return decoded
 }
 
 func hasBundleFinding(findings []string, needle string) bool {
