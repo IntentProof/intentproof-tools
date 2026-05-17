@@ -128,6 +128,7 @@ RELEASE_BINARIES_REQUIRED_SNIPPETS = [
     "artifact_download_path: dist",
     "attest_to_rekor: ${{ github.event_name != 'workflow_dispatch' }}",
     "release-signing-metadata",
+    "GH_REPO: ${{ github.repository }}",
     "gh release upload",
 ]
 
