@@ -181,26 +181,52 @@ jobs:
               --bundle "${artifact}.sbom.sigstore.json" \
               "$artifact"
 
-            cat > "${artifact}.intoto.json" <<-EOF
-          {
-            "_type": "https://in-toto.io/Statement/v1",
-            "subject": [{"name": "${SUBJECT_NAME}", "digest": {"sha256": "$(sha256sum "$artifact" | awk '{print $1}')"}}],
-            "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {
-              "buildDefinition": {
-                "buildType": "https://github.com/IntentProof/release-build-sign",
-                "externalParameters": {
-                  "releaseVersion": "${RELEASE_VERSION}",
-                  "artifactPath": "${artifact}"
-                }
+            artifact_sha="$(sha256sum "$artifact" | awk '{print $1}')"
+            ARTIFACT_PATH="$artifact" ARTIFACT_SHA="$artifact_sha" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          artifact_path = os.environ["ARTIFACT_PATH"]
+          statement = {
+              "_type": "https://in-toto.io/Statement/v1",
+              "subject": [
+                  {
+                      "name": os.environ["SUBJECT_NAME"],
+                      "digest": {"sha256": os.environ["ARTIFACT_SHA"]},
+                  }
+              ],
+              "predicateType": "https://slsa.dev/provenance/v1",
+              "predicate": {
+                  "buildDefinition": {
+                      "buildType": "https://github.com/IntentProof/release-build-sign",
+                      "externalParameters": {
+                          "releaseVersion": os.environ["RELEASE_VERSION"],
+                          "artifactPath": artifact_path,
+                      },
+                  },
+                  "runDetails": {
+                      "builder": {
+                          "id": (
+                              f"{os.environ['GITHUB_SERVER_URL']}/"
+                              f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                              f"{os.environ['GITHUB_RUN_ID']}"
+                          )
+                      },
+                      "metadata": {
+                          "invocationId": (
+                              f"{os.environ['GITHUB_RUN_ID']}-"
+                              f"{os.environ['GITHUB_RUN_ATTEMPT']}"
+                          )
+                      },
+                  },
               },
-              "runDetails": {
-                "builder": {"id": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"},
-                "metadata": {"invocationId": "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"}
-              }
-            }
           }
-          EOF
+          Path(f"{artifact_path}.intoto.json").write_text(
+              json.dumps(statement, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
             cosign attest-blob --yes \
               "${tlog_args[@]}" \
               --type slsaprovenance \
@@ -232,6 +258,12 @@ jobs:
     steps:
       - uses: sigstore/cosign-installer@v3
       - uses: anchore/sbom-action/download-syft@v0
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Sign container image and attest SBOM
         env:
