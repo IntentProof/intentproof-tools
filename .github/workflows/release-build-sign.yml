@@ -199,42 +199,36 @@ jobs:
           from pathlib import Path
 
           artifact_path = os.environ["ARTIFACT_PATH"]
-          statement = {
-              "_type": "https://in-toto.io/Statement/v1",
-              "subject": [
+          run_id = os.environ["GITHUB_RUN_ID"]
+          predicate = {
+              "builder": {
+                  "id": (
+                      f"{os.environ['GITHUB_SERVER_URL']}/"
+                      f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/{run_id}"
+                  )
+              },
+              "buildType": "https://github.com/IntentProof/release-build-sign",
+              "invocation": {
+                  "parameters": {
+                      "releaseVersion": os.environ["RELEASE_VERSION"],
+                      "artifactPath": artifact_path,
+                      "subjectName": os.environ["SUBJECT_NAME"],
+                  }
+              },
+              "metadata": {
+                  "buildInvocationId": (
+                      f"{run_id}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+                  )
+              },
+              "materials": [
                   {
-                      "name": os.environ["SUBJECT_NAME"],
+                      "uri": f"file:{artifact_path}",
                       "digest": {"sha256": os.environ["ARTIFACT_SHA"]},
                   }
               ],
-              "predicateType": "https://slsa.dev/provenance/v1",
-              "predicate": {
-                  "buildDefinition": {
-                      "buildType": "https://github.com/IntentProof/release-build-sign",
-                      "externalParameters": {
-                          "releaseVersion": os.environ["RELEASE_VERSION"],
-                          "artifactPath": artifact_path,
-                      },
-                  },
-                  "runDetails": {
-                      "builder": {
-                          "id": (
-                              f"{os.environ['GITHUB_SERVER_URL']}/"
-                              f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
-                              f"{os.environ['GITHUB_RUN_ID']}"
-                          )
-                      },
-                      "metadata": {
-                          "invocationId": (
-                              f"{os.environ['GITHUB_RUN_ID']}-"
-                              f"{os.environ['GITHUB_RUN_ATTEMPT']}"
-                          )
-                      },
-                  },
-              },
           }
           Path(f"{artifact_path}.intoto.json").write_text(
-              json.dumps(statement, indent=2) + "\n",
+              json.dumps(predicate, indent=2) + "\n",
               encoding="utf-8",
           )
           PY
