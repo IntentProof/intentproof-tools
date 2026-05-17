@@ -23,6 +23,21 @@ func TestContractUsageMessage(t *testing.T) {
 	}
 }
 
+func TestContractVersionMessage(t *testing.T) {
+	var stdout strings.Builder
+	var stderr strings.Builder
+	code := run([]string{"--version"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if got := stdout.String(); !strings.Contains(got, "intentproof-verify dev") {
+		t.Fatalf("unexpected stdout: %s", got)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
 func TestContractMissingInputFileError(t *testing.T) {
 	var stdout strings.Builder
 	var stderr strings.Builder

@@ -52,6 +52,11 @@ SDK creates it when an app calls `configure()` without an explicit `dataDir`.
 Tests and demos may override the home directory they use, so they do not need
 to touch the real `~/.intentproof` tree.
 
+The same local loop is also packaged as
+`ghcr.io/intentproof/intentproof-local`; see
+[`docs/intentproof-local-image.md`](docs/intentproof-local-image.md) for ports,
+volume mounts, image tags, and signature verification.
+
 ## License
 
 Apache License 2.0. See `LICENSE` and `NOTICE`.

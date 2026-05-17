@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/intentproof/intentproof-tools/pkg/buildinfo"
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
 	"github.com/intentproof/intentproof-tools/pkg/crypto"
 	"github.com/intentproof/intentproof-tools/pkg/verifier"
@@ -20,6 +21,11 @@ func main() {
 }
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
+		fmt.Fprintln(stdout, buildinfo.String("intentproof-verify"))
+		return 0
+	}
+
 	var outputPath string
 	fs := flag.NewFlagSet("intentproof-verify", flag.ContinueOnError)
 	fs.SetOutput(stderr)
