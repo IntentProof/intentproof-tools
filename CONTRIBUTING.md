@@ -53,6 +53,16 @@ for the certification-mark policy.
   audit-contract surface remains Apache 2.0 and independently
   buildable, even when the operational data plane evolves.
 
+## Release signing
+
+Maintainer release workflows use `.github/workflows/release-build-sign.yml`
+as the reusable signing contract for binaries, containers, npm packages,
+PyPI packages, and generic release artifacts. The workflow requires GitHub
+OIDC (`id-token: write`) for Sigstore keyless signing and fails closed when
+Rekor publication is requested without an OIDC token.
+
+See `docs/release-signing.md` for caller inputs and verification commands.
+
 ## License
 
 By contributing as a maintainer, you agree your commits are licensed
