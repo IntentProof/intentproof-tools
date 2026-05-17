@@ -27,14 +27,6 @@ on:
         required: false
         type: string
         default: "."
-      image_ref:
-        required: false
-        type: string
-        default: ""
-      registry:
-        required: false
-        type: string
-        default: "ghcr.io"
       npm_package_path:
         required: false
         type: string
@@ -73,8 +65,6 @@ jobs:
           ARTIFACT_KIND: ${{ inputs.artifact_kind }}
           ATTEST_TO_REKOR: ${{ inputs.attest_to_rekor }}
           ARTIFACT_PATHS: ${{ inputs.artifact_paths }}
-          IMAGE_REF: ${{ inputs.image_ref }}
-          REGISTRY: ${{ inputs.registry }}
           NPM_PACKAGE_PATH: ${{ inputs.npm_package_path }}
           PYPI_DIST_DIR: ${{ inputs.pypi_dist_dir }}
           RELEASE_REF: ${{ inputs.release_ref }}
@@ -82,9 +72,9 @@ jobs:
           set -euo pipefail
 
           case "$ARTIFACT_KIND" in
-            binary|container|npm|pypi|generic) ;;
+            binary|npm|pypi|generic) ;;
             *)
-              echo "artifact_kind must be one of binary, container, npm, pypi, generic" >&2
+              echo "artifact_kind must be one of binary, npm, pypi, generic" >&2
               exit 1
               ;;
           esac
@@ -104,14 +94,6 @@ jobs:
           case "$ARTIFACT_KIND" in
             binary|generic)
               test -n "$ARTIFACT_PATHS" || { echo "artifact_paths is required" >&2; exit 1; }
-              ;;
-            container)
-              test -n "$IMAGE_REF" || { echo "image_ref is required" >&2; exit 1; }
-              test "$REGISTRY" = "ghcr.io" || { echo "only ghcr.io is supported" >&2; exit 1; }
-              if [[ ! "$IMAGE_REF" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
-                echo "image_ref must be digest-bound with @sha256:<digest>" >&2
-                exit 1
-              fi
               ;;
             npm)
               test -n "$NPM_PACKAGE_PATH" || { echo "npm_package_path is required" >&2; exit 1; }
@@ -250,39 +232,6 @@ jobs:
             **/*.spdx.json
             **/*.intoto.json
             release-attestations/SHA256SUMS
-
-  container:
-    name: "IntentProof Release: Sign Container Image"
-    needs: validate
-    if: inputs.artifact_kind == 'container'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: sigstore/cosign-installer@v3
-      - uses: anchore/sbom-action/download-syft@v0
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: Sign container image and attest SBOM
-        env:
-          IMAGE_REF: ${{ inputs.image_ref }}
-          ATTEST_TO_REKOR: ${{ inputs.attest_to_rekor }}
-        run: |
-          set -euo pipefail
-          tlog_args=()
-          if [[ "$ATTEST_TO_REKOR" != "true" ]]; then
-            tlog_args+=(--tlog-upload=false)
-          fi
-
-          cosign sign --yes "${tlog_args[@]}" "$IMAGE_REF"
-          syft packages "$IMAGE_REF" -o spdx-json=image.spdx.json
-          cosign attest --yes "${tlog_args[@]}" --type spdxjson --predicate image.spdx.json "$IMAGE_REF"
 
   npm:
     name: "IntentProof Release: Pack and Publish npm Package"

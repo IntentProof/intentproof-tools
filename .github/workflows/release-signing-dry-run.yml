@@ -117,9 +117,8 @@ jobs:
     name: "IntentProof Release: Sign Test Container"
     needs: build-test-container
     if: always() && (inputs.container_image_ref != '' || needs.build-test-container.result == 'success')
-    uses: ./.github/workflows/release-build-sign.yml
+    uses: ./.github/workflows/release-container-sign.yml
     with:
-      artifact_kind: container
       subject_name: ${{ inputs.container_image_ref != '' && inputs.container_image_ref || needs.build-test-container.outputs.image_ref }}
       release_version: ${{ inputs.release_version }}
       release_ref: ${{ inputs.release_ref }}
