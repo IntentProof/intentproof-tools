@@ -6,8 +6,10 @@ artifact metadata for one artifact kind at a time.
 
 `release-signing-dry-run.yml` is this repository's caller workflow. It builds a
 test `intentproof-verify` binary, downloads that artifact into the reusable
-workflow, and signs it with `attest_to_rekor: false`. It can also exercise the
-container signing path when a digest-bound `container_image_ref` is provided.
+workflow, and signs it with `attest_to_rekor: false`. It also builds and pushes
+a tiny `ghcr.io/intentproof/test-hello` image, then signs and attests that
+image by digest through the container path. A digest-bound `container_image_ref`
+can be provided to sign an existing image instead.
 
 ## Required Inputs
 
@@ -52,10 +54,10 @@ attestations.
 
 For a dry run, dispatch `release signing dry run`; it defaults to
 `refs/heads/main` and sets `attest_to_rekor: false`. Leave
-`container_image_ref` empty to exercise only the downloaded binary-artifact
-path, or pass a digest-bound GHCR image such as
-`ghcr.io/intentproof/test-hello@sha256:<digest>` to exercise container signing.
-Rekor-backed releases still require a SemVer tag ref such as
+`container_image_ref` empty to exercise both the downloaded binary-artifact
+path and the generated test-container path, or pass a digest-bound GHCR image
+such as `ghcr.io/intentproof/test-hello@sha256:<digest>` to sign an existing
+image. Rekor-backed releases still require a SemVer tag ref such as
 `refs/tags/v1.2.3`.
 
 Customers verify released blobs with the IntentProof GitHub Actions identity:
