@@ -37,6 +37,21 @@ builder, attestation gateway, query API, certificate issuer,
 subject-mapping sweeper, pull-source workers, DB migrations — lives
 in `intentproof-core` under BSL 1.1.
 
+## Local filesystem state
+
+`intentproof local` stores its laptop-only runtime state under
+`~/.intentproof/local`. That directory contains the local SQLite database
+(`local.db`) and embedded NATS state used by the local loop. Delete
+`~/.intentproof/local` to reset the local loop.
+
+When present, `intentproof local` also imports the Node SDK public key from
+`~/.intentproof/sdk-node/keypair.json` so locally wrapped events can verify
+without extra setup. The local loop does not create that SDK keypair; the Node
+SDK creates it when an app calls `configure()` without an explicit `dataDir`.
+
+Tests and demos may override the home directory they use, so they do not need
+to touch the real `~/.intentproof` tree.
+
 ## License
 
 Apache License 2.0. See `LICENSE` and `NOTICE`.
