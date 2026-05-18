@@ -90,7 +90,7 @@ jobs:
           set -euo pipefail
           cd homebrew-tap
           git switch -c "$TAP_BRANCH"
-          if git diff --quiet -- Formula; then
+          if [[ -z "$(git status --porcelain -- Formula)" ]]; then
             echo "Homebrew formulae are already current for $RELEASE_TAG."
             exit 0
           fi
