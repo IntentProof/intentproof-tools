@@ -32,6 +32,12 @@ RELEASE_LOCAL_IMAGE_WORKFLOW = Path(
         ROOT / ".github" / "workflows" / "release-local-image.yml",
     )
 )
+RELEASE_HOMEBREW_WORKFLOW = Path(
+    os.environ.get(
+        "INTENTPROOF_RELEASE_HOMEBREW_WORKFLOW",
+        ROOT / ".github" / "workflows" / "release-homebrew.yml",
+    )
+)
 GORELEASER_CONFIG = Path(
     os.environ.get("INTENTPROOF_GORELEASER_CONFIG", ROOT / ".goreleaser.yaml")
 )
@@ -148,6 +154,18 @@ RELEASE_LOCAL_IMAGE_REQUIRED_SNIPPETS = [
     "attest_to_rekor: ${{ github.event_name != 'workflow_dispatch' }}",
 ]
 
+RELEASE_HOMEBREW_REQUIRED_SNIPPETS = [
+    "release:",
+    "types: [published]",
+    "workflow_dispatch:",
+    "INTENTPROOF_HOMEBREW_TAP_TOKEN",
+    "IntentProof/homebrew-tap",
+    "scripts/render-homebrew-formulas.py",
+    "gh release view",
+    "gh pr create",
+    "commit -s",
+]
+
 GORELEASER_REQUIRED_SNIPPETS = [
     "version: 2",
     "project_name: intentproof-tools",
@@ -259,6 +277,11 @@ def main() -> int:
             RELEASE_LOCAL_IMAGE_WORKFLOW,
             RELEASE_LOCAL_IMAGE_REQUIRED_SNIPPETS,
             "release local image workflow",
+        ),
+        (
+            RELEASE_HOMEBREW_WORKFLOW,
+            RELEASE_HOMEBREW_REQUIRED_SNIPPETS,
+            "release homebrew workflow",
         ),
         (GORELEASER_CONFIG, GORELEASER_REQUIRED_SNIPPETS, "GoReleaser config"),
         (
