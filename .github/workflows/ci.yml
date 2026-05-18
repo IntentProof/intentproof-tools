@@ -55,6 +55,24 @@ jobs:
       - name: Tier dependency invariant
         run: ./scripts/check-tier-isolation.sh
 
+  package-signing-compat:
+    name: "IntentProof CI: Package Signing Compatibility"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Linux package verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg rpm
+
+      - name: Verify OpenPGP package metadata compatibility
+        run: ./scripts/check-package-signing-compat.sh
+
   dco:
     name: "IntentProof CI: DCO"
     runs-on: ubuntu-latest

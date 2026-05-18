@@ -41,41 +41,34 @@ func TestArmoredDetachSignVerifiesWithGPGWhenAvailable(t *testing.T) {
 	if _, err := exec.LookPath("gpg"); err != nil {
 		t.Skip("gpg not installed")
 	}
-	entity := testEntity(t)
-	dir, err := os.MkdirTemp("/tmp", "ipgpg-*")
-	if err != nil {
-		t.Fatalf("create short temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-	messagePath := filepath.Join(dir, "Release")
-	keyPath := filepath.Join(dir, "intentproof.gpg")
-	sigPath := filepath.Join(dir, "Release.gpg")
-	home := filepath.Join(dir, "gnupg")
+	artifacts := writePackageSigningArtifacts(t, "ipgpg-*")
+	home := filepath.Join(artifacts.dir, "gnupg")
 	if err := os.Mkdir(home, 0o700); err != nil {
 		t.Fatalf("mkdir gnupg home: %v", err)
 	}
-	message := []byte("Origin: IntentProof\nSuite: stable\n")
-	if err := os.WriteFile(messagePath, message, 0o644); err != nil {
-		t.Fatalf("write message: %v", err)
-	}
 
-	var publicKey bytes.Buffer
-	if err := ArmoredPublicKey(&publicKey, entity); err != nil {
-		t.Fatalf("export public key: %v", err)
-	}
-	if err := os.WriteFile(keyPath, publicKey.Bytes(), 0o644); err != nil {
-		t.Fatalf("write key: %v", err)
-	}
-	var sig bytes.Buffer
-	if err := ArmoredDetachSign(&sig, entity, bytes.NewReader(message), fixedTime()); err != nil {
-		t.Fatalf("detach sign: %v", err)
-	}
-	if err := os.WriteFile(sigPath, sig.Bytes(), 0o644); err != nil {
-		t.Fatalf("write signature: %v", err)
-	}
+	runGPG(t, home, "--import", artifacts.keyPath)
+	runGPG(t, home, "--verify", artifacts.sigPath, artifacts.messagePath)
+}
 
-	runGPG(t, home, "--import", keyPath)
-	runGPG(t, home, "--verify", sigPath, messagePath)
+func TestArmoredDetachSignVerifiesWithAptKeyWhenAvailable(t *testing.T) {
+	if _, err := exec.LookPath("apt-key"); err != nil {
+		t.Skip("apt-key not installed")
+	}
+	if _, err := exec.LookPath("gpg"); err != nil {
+		t.Skip("gpg not installed")
+	}
+	artifacts := writePackageSigningArtifacts(t, "ipapt-*")
+	keyringPath := filepath.Join(artifacts.dir, "intentproof-keyring.gpg")
+
+	cmd := exec.Command("gpg", "--batch", "--yes", "--dearmor", "--output", keyringPath, artifacts.keyPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("gpg dearmor: %v\n%s", err, out)
+	}
+	cmd = exec.Command("apt-key", "--keyring", keyringPath, "verify", artifacts.sigPath, artifacts.messagePath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("apt-key verify: %v\n%s", err, out)
+	}
 }
 
 func TestRejectsNonRSASigner(t *testing.T) {
@@ -123,6 +116,48 @@ func testEntity(t *testing.T) *openpgp.Entity {
 
 func fixedTime() time.Time {
 	return time.Date(2026, 5, 17, 12, 0, 0, 0, time.UTC)
+}
+
+type packageSigningArtifacts struct {
+	dir         string
+	keyPath     string
+	messagePath string
+	sigPath     string
+}
+
+func writePackageSigningArtifacts(t *testing.T, pattern string) packageSigningArtifacts {
+	t.Helper()
+	entity := testEntity(t)
+	dir, err := os.MkdirTemp("/tmp", pattern)
+	if err != nil {
+		t.Fatalf("create short temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	artifacts := packageSigningArtifacts{
+		dir:         dir,
+		keyPath:     filepath.Join(dir, "intentproof.gpg"),
+		messagePath: filepath.Join(dir, "Release"),
+		sigPath:     filepath.Join(dir, "Release.gpg"),
+	}
+	message := []byte("Origin: IntentProof\nSuite: stable\n")
+	if err := os.WriteFile(artifacts.messagePath, message, 0o644); err != nil {
+		t.Fatalf("write message: %v", err)
+	}
+	var publicKey bytes.Buffer
+	if err := ArmoredPublicKey(&publicKey, entity); err != nil {
+		t.Fatalf("export public key: %v", err)
+	}
+	if err := os.WriteFile(artifacts.keyPath, publicKey.Bytes(), 0o644); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	var sig bytes.Buffer
+	if err := ArmoredDetachSign(&sig, entity, bytes.NewReader(message), fixedTime()); err != nil {
+		t.Fatalf("detach sign: %v", err)
+	}
+	if err := os.WriteFile(artifacts.sigPath, sig.Bytes(), 0o644); err != nil {
+		t.Fatalf("write signature: %v", err)
+	}
+	return artifacts
 }
 
 func runGPG(t *testing.T, home string, args ...string) {
