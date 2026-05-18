@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 )
@@ -48,5 +49,19 @@ func TestShouldPrintExportMessage(t *testing.T) {
 		if got := shouldPrintExportMessage(tc.path); got != tc.want {
 			t.Fatalf("shouldPrintExportMessage(%q) = %v, want %v", tc.path, got, tc.want)
 		}
+	}
+}
+
+func TestOutputWriterTreatsTrimmedDashAsStdout(t *testing.T) {
+	var stdout bytes.Buffer
+	w, closeOut, err := outputWriter(" - ", &stdout)
+	if err != nil {
+		t.Fatalf("outputWriter: %v", err)
+	}
+	if closeOut != nil {
+		t.Fatal("expected stdout writer to have no closer")
+	}
+	if w != io.Writer(&stdout) {
+		t.Fatal("expected whitespace-padded dash to route to stdout")
 	}
 }

@@ -166,7 +166,8 @@ func entityFromOptions(opts commandOptions) (*openpgp.Entity, time.Time, error) 
 }
 
 func outputWriter(path string, stdout io.Writer) (io.Writer, func(), error) {
-	if strings.TrimSpace(path) == "" || path == "-" {
+	path = strings.TrimSpace(path)
+	if path == "" || path == "-" {
 		return stdout, nil, nil
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
