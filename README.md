@@ -24,10 +24,12 @@ dependency invariant are normative for this repository:
 |------|---------|
 | `cmd/intentproof-verify` | Pure-Go offline verifier. Takes a `.proof.tar.zst` bundle and prints pass/fail. |
 | `cmd/intentproof` | Developer CLI. `policy lint`, `policy test`, `policy diff`, `policy publish`, `policy activate`, `local`. |
+| `cmd/intentproof-pkg-sign` | KMS-backed OpenPGP signing helper for package repository metadata. |
 | `pkg/verifier` | Deterministic DSL evaluator for the 7 canonical rule kinds. |
 | `pkg/bundle` | `.proof.tar.zst` build / extract / signature-verify. |
 | `pkg/policy` | YAML → canonical-JSON policy compiler, fingerprinting, semantic diff. |
 | `pkg/crypto` | Policy signer / verifier abstractions, KMS + local-Ed25519 implementations. |
+| `pkg/openpgpkms` | OpenPGP public-key export and detached-signature helpers backed by AWS KMS RSA signing keys. |
 | `pkg/attestation` | Adapter SDK interface, canonicalization helpers, replay-key conventions. (First-party adapter *implementations* are Tier 2 and live in `intentproof-core`.) |
 
 ## What is NOT in here
