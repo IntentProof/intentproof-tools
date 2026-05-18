@@ -33,3 +33,20 @@ func TestRunRequiresKMSKeyID(t *testing.T) {
 		t.Fatalf("expected KMS key guidance, got %q", stderr.String())
 	}
 }
+
+func TestShouldPrintExportMessage(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"", false},
+		{"-", false},
+		{" - ", false},
+		{"intentproof.gpg", true},
+	}
+	for _, tc := range cases {
+		if got := shouldPrintExportMessage(tc.path); got != tc.want {
+			t.Fatalf("shouldPrintExportMessage(%q) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}

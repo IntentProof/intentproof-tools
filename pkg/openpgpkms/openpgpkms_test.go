@@ -85,6 +85,25 @@ func TestRejectsNonRSASigner(t *testing.T) {
 	}
 }
 
+func TestNewEntityRequiresCreationTime(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate rsa key: %v", err)
+	}
+	_, err = NewEntity(priv, EntityOptions{})
+	if err == nil {
+		t.Fatal("expected missing creation time to fail")
+	}
+}
+
+func TestArmoredDetachSignRequiresCreationTime(t *testing.T) {
+	entity := testEntity(t)
+	err := ArmoredDetachSign(io.Discard, entity, bytes.NewReader([]byte("metadata")), time.Time{})
+	if err == nil {
+		t.Fatal("expected missing signature creation time to fail")
+	}
+}
+
 func testEntity(t *testing.T) *openpgp.Entity {
 	t.Helper()
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)

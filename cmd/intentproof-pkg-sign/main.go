@@ -104,7 +104,7 @@ func runExportPublicKey(args []string, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}
-	if outputPath != "" {
+	if shouldPrintExportMessage(outputPath) {
 		fmt.Fprintf(stdout, "exported OpenPGP public key %s\n", openpgpkms.Fingerprint(entity))
 	}
 	return 0
@@ -174,6 +174,11 @@ func outputWriter(path string, stdout io.Writer) (io.Writer, func(), error) {
 		return nil, nil, fmt.Errorf("open output: %w", err)
 	}
 	return f, func() { _ = f.Close() }, nil
+}
+
+func shouldPrintExportMessage(path string) bool {
+	path = strings.TrimSpace(path)
+	return path != "" && path != "-"
 }
 
 func writeUsage(stderr io.Writer) {

@@ -44,7 +44,7 @@ func NewEntity(signer crypto.Signer, opts EntityOptions) (*openpgp.Entity, error
 	}
 	createdAt := opts.CreatedAt.UTC()
 	if createdAt.IsZero() {
-		createdAt = time.Now().UTC()
+		return nil, fmt.Errorf("OpenPGP creation time is required for stable fingerprints")
 	}
 
 	uid := packet.NewUserId(name, strings.TrimSpace(opts.Comment), email)
@@ -111,6 +111,9 @@ func ArmoredDetachSign(w io.Writer, entity *openpgp.Entity, message io.Reader, c
 	if message == nil {
 		return fmt.Errorf("message is required")
 	}
+	if createdAt.IsZero() {
+		return fmt.Errorf("OpenPGP signature creation time is required")
+	}
 	if err := openpgp.ArmoredDetachSign(w, entity, message, pgpConfig(createdAt)); err != nil {
 		return fmt.Errorf("OpenPGP detached sign: %w", err)
 	}
@@ -127,9 +130,6 @@ func Fingerprint(entity *openpgp.Entity) string {
 
 func pgpConfig(createdAt time.Time) *packet.Config {
 	t := createdAt.UTC()
-	if t.IsZero() {
-		t = time.Now().UTC()
-	}
 	return &packet.Config{
 		DefaultHash: crypto.SHA512,
 		Time: func() time.Time {
