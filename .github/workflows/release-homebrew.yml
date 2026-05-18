@@ -50,17 +50,6 @@ jobs:
             exit 1
           }
 
-      - name: Fetch release asset metadata
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
-        run: |
-          set -euo pipefail
-          gh release view "$RELEASE_TAG" \
-            --repo IntentProof/intentproof-tools \
-            --json assets \
-            > release-assets.json
-
       - name: Checkout Homebrew tap
         uses: actions/checkout@v4
         with:
@@ -69,15 +58,28 @@ jobs:
           path: homebrew-tap
           fetch-depth: 0
 
-      - name: Render formulae
+      - name: Render formulae from release assets
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
         run: |
           set -euo pipefail
-          python3 ./scripts/render-homebrew-formulas.py \
-            --release-tag "$RELEASE_TAG" \
-            --assets-json release-assets.json \
-            --output-dir homebrew-tap/Formula
+          for attempt in {1..30}; do
+            gh release view "$RELEASE_TAG" \
+              --repo IntentProof/intentproof-tools \
+              --json assets \
+              > release-assets.json
+            if python3 ./scripts/render-homebrew-formulas.py \
+              --release-tag "$RELEASE_TAG" \
+              --assets-json release-assets.json \
+              --output-dir homebrew-tap/Formula; then
+              exit 0
+            fi
+            echo "Release assets are not complete yet; retrying ($attempt/30)."
+            sleep 20
+          done
+          echo "Timed out waiting for signed release assets for $RELEASE_TAG" >&2
+          exit 1
 
       - name: Open tap pull request
         env:
