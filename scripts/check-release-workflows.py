@@ -38,6 +38,12 @@ RELEASE_HOMEBREW_WORKFLOW = Path(
         ROOT / ".github" / "workflows" / "release-homebrew.yml",
     )
 )
+RELEASE_APT_WORKFLOW = Path(
+    os.environ.get(
+        "INTENTPROOF_RELEASE_APT_WORKFLOW",
+        ROOT / ".github" / "workflows" / "release-apt.yml",
+    )
+)
 GORELEASER_CONFIG = Path(
     os.environ.get("INTENTPROOF_GORELEASER_CONFIG", ROOT / ".goreleaser.yaml")
 )
@@ -166,6 +172,18 @@ RELEASE_HOMEBREW_REQUIRED_SNIPPETS = [
     "commit -s",
 ]
 
+RELEASE_APT_REQUIRED_SNIPPETS = [
+    "release:",
+    "types: [published]",
+    "workflow_dispatch:",
+    "IntentProof Release: Build Apt Repository",
+    "git checkout --detach",
+    "github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.46.3",
+    "scripts/build-apt-repo.sh",
+    "apt-repository-layout",
+    "dist/apt",
+]
+
 GORELEASER_REQUIRED_SNIPPETS = [
     "version: 2",
     "project_name: intentproof-tools",
@@ -282,6 +300,11 @@ def main() -> int:
             RELEASE_HOMEBREW_WORKFLOW,
             RELEASE_HOMEBREW_REQUIRED_SNIPPETS,
             "release homebrew workflow",
+        ),
+        (
+            RELEASE_APT_WORKFLOW,
+            RELEASE_APT_REQUIRED_SNIPPETS,
+            "release apt workflow",
         ),
         (GORELEASER_CONFIG, GORELEASER_REQUIRED_SNIPPETS, "GoReleaser config"),
         (
