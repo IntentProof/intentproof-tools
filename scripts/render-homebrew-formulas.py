@@ -47,7 +47,7 @@ def load_assets(path: Path) -> dict[str, dict[str, str]]:
     by_name: dict[str, dict[str, str]] = {}
     for asset in assets:
         name = asset["name"]
-        digest = asset.get("digest", "")
+        digest = asset.get("digest") or ""
         if not digest.startswith("sha256:"):
             raise ValueError(f"asset {name} is missing a sha256 digest")
         by_name[name] = {
