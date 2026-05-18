@@ -25,6 +25,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	switch args[0] {
 	case "sign":
 		return runSign(args[1:], stdout, stderr)
+	case "clearsign":
+		return runClearSign(args[1:], stdout, stderr)
 	case "export-public-key":
 		return runExportPublicKey(args[1:], stdout, stderr)
 	default:
@@ -68,6 +70,46 @@ func runSign(args []string, stdout io.Writer, stderr io.Writer) int {
 		defer closeOut()
 	}
 	if err := openpgpkms.ArmoredDetachSign(out, entity, input, createdAt); err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func runClearSign(args []string, stdout io.Writer, stderr io.Writer) int {
+	opts := commandOptions{}
+	fs := newFlagSet("intentproof-pkg-sign clearsign", stderr, &opts)
+	var outputPath string
+	fs.StringVar(&outputPath, "output", "", "write armored clearsigned message to this path")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintln(stderr, "error: exactly one input file is required")
+		return 1
+	}
+
+	entity, createdAt, err := entityFromOptions(opts)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	input, err := os.Open(fs.Arg(0))
+	if err != nil {
+		fmt.Fprintf(stderr, "error: open input: %v\n", err)
+		return 1
+	}
+	defer input.Close()
+
+	out, closeOut, err := outputWriter(outputPath, stdout)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	if closeOut != nil {
+		defer closeOut()
+	}
+	if err := openpgpkms.ArmoredClearSign(out, entity, input, createdAt); err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}
@@ -186,5 +228,6 @@ func writeUsage(stderr io.Writer) {
 	fmt.Fprintln(stderr, "Usage: intentproof-pkg-sign <command>")
 	fmt.Fprintln(stderr, "Commands:")
 	fmt.Fprintln(stderr, "  sign --kms-key-id <key> --created-at <rfc3339> --output <file.asc> <file>")
+	fmt.Fprintln(stderr, "  clearsign --kms-key-id <key> --created-at <rfc3339> --output <file> <file>")
 	fmt.Fprintln(stderr, "  export-public-key --kms-key-id <key> --created-at <rfc3339> --output <key.asc>")
 }

@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
+	"golang.org/x/crypto/openpgp/clearsign"
 	"golang.org/x/crypto/openpgp/packet"
 )
 
@@ -99,6 +100,34 @@ func ArmoredPublicKey(w io.Writer, entity *openpgp.Entity) error {
 	}
 	if err := out.Close(); err != nil {
 		return fmt.Errorf("close public key armor: %w", err)
+	}
+	return nil
+}
+
+// ArmoredClearSign writes an ASCII-armored clearsigned OpenPGP message.
+func ArmoredClearSign(w io.Writer, entity *openpgp.Entity, message io.Reader, createdAt time.Time) error {
+	if entity == nil || entity.PrivateKey == nil {
+		return fmt.Errorf("entity with private key is required")
+	}
+	if message == nil {
+		return fmt.Errorf("message is required")
+	}
+	if createdAt.IsZero() {
+		return fmt.Errorf("OpenPGP signature creation time is required")
+	}
+	body, err := io.ReadAll(message)
+	if err != nil {
+		return fmt.Errorf("read message: %w", err)
+	}
+	signer, err := clearsign.Encode(w, entity.PrivateKey, pgpConfig(createdAt))
+	if err != nil {
+		return fmt.Errorf("encode clearsigned message: %w", err)
+	}
+	if _, err := signer.Write(body); err != nil {
+		return fmt.Errorf("write clearsigned message: %w", err)
+	}
+	if err := signer.Close(); err != nil {
+		return fmt.Errorf("close clearsigned message: %w", err)
 	}
 	return nil
 }
