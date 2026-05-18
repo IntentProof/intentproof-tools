@@ -376,7 +376,7 @@ func GetFlowByCorrelationID(ctx context.Context, db *sql.DB, tenantID, correlati
 		FROM flows f
 		JOIN snapshots s ON s.snapshot_id = f.snapshot_uri
 		WHERE f.tenant_id = ? AND f.correlation_id = ?
-		ORDER BY f.window_closed_at DESC
+		ORDER BY f.window_closed_at DESC, f.event_count DESC, f.flow_id DESC
 		LIMIT 1`,
 		tenantID, correlationID,
 	).Scan(&flowID, &snapJSON)
