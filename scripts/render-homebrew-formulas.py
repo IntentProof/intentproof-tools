@@ -48,10 +48,8 @@ def load_assets(path: Path) -> dict[str, dict[str, str]]:
     for asset in assets:
         name = asset["name"]
         digest = asset.get("digest") or ""
-        if not digest.startswith("sha256:"):
-            raise ValueError(f"asset {name} is missing a sha256 digest")
         by_name[name] = {
-            "sha256": digest.removeprefix("sha256:"),
+            "sha256": digest.removeprefix("sha256:") if digest.startswith("sha256:") else "",
             "url": asset["url"],
         }
     return by_name
@@ -59,9 +57,12 @@ def load_assets(path: Path) -> dict[str, dict[str, str]]:
 
 def asset(by_name: dict[str, dict[str, str]], name: str) -> dict[str, str]:
     try:
-        return by_name[name]
+        metadata = by_name[name]
     except KeyError as exc:
         raise ValueError(f"release asset not found: {name}") from exc
+    if not metadata["sha256"]:
+        raise ValueError(f"release asset {name} is missing a sha256 digest")
+    return metadata
 
 
 def render_resource(name: str, metadata: dict[str, str], indent: str) -> list[str]:
