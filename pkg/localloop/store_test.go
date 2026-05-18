@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStoreEventAcceptsUppercaseHexInPrevEventHash(t *testing.T) {
@@ -122,5 +123,74 @@ func TestStoreEventIdempotentSameEventID(t *testing.T) {
 	}
 	if inserted2 {
 		t.Fatal("expected inserted=false on replay")
+	}
+}
+
+func TestGetFlowByCorrelationIDPrefersCompleteSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenDB(filepath.Join(dir, "flow.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	window := SnapshotWindow{
+		OpenedAt:      time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC),
+		ClosedAt:      time.Date(2026, 5, 15, 12, 0, 2, 0, time.UTC),
+		ClosureReason: "event_committed",
+	}
+
+	partial := FlowSnapshot{
+		Schema:        "intentproof.flow.v1",
+		FlowID:        "flow_corr_evt_1",
+		TenantID:      "tnt_flow",
+		CorrelationID: "corr_flow",
+		Window:        window,
+		Events: []SnapshotEvent{{
+			EventID: "evt_1",
+			Ordinal: 0,
+			Hash:    "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+		}},
+		InstrumentationMode: "operational",
+		FlowMerkleRoot:      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotURI:         "local://snapshot/flow_corr_evt_1",
+	}
+	complete := FlowSnapshot{
+		Schema:        "intentproof.flow.v1",
+		FlowID:        "flow_corr_evt_2",
+		TenantID:      "tnt_flow",
+		CorrelationID: "corr_flow",
+		Window:        window,
+		Events: []SnapshotEvent{{
+			EventID: "evt_1",
+			Ordinal: 0,
+			Hash:    "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+		}, {
+			EventID: "evt_2",
+			Ordinal: 1,
+			Hash:    "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+		}},
+		InstrumentationMode: "operational",
+		FlowMerkleRoot:      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		SnapshotURI:         "local://snapshot/flow_corr_evt_2",
+	}
+
+	if err := UpsertFlow(ctx, db, partial); err != nil {
+		t.Fatalf("upsert partial: %v", err)
+	}
+	if err := UpsertFlow(ctx, db, complete); err != nil {
+		t.Fatalf("upsert complete: %v", err)
+	}
+
+	got, err := GetFlowByCorrelationID(ctx, db, "tnt_flow", "corr_flow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.FlowID != complete.FlowID {
+		t.Fatalf("flow id = %q, want %q", got.FlowID, complete.FlowID)
+	}
+	if len(got.Events) != len(complete.Events) {
+		t.Fatalf("event count = %d, want %d", len(got.Events), len(complete.Events))
 	}
 }
