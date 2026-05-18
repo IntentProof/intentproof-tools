@@ -13,7 +13,86 @@ import (
 	"time"
 
 	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/clearsign"
 )
+
+func TestArmoredClearSignVerifiesWithOpenPGP(t *testing.T) {
+	entity := testEntity(t)
+	message := []byte("Origin: IntentProof\nSuite: stable\n")
+
+	var publicKey bytes.Buffer
+	if err := ArmoredPublicKey(&publicKey, entity); err != nil {
+		t.Fatalf("export public key: %v", err)
+	}
+	keyring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(publicKey.Bytes()))
+	if err != nil {
+		t.Fatalf("read armored keyring: %v", err)
+	}
+
+	var clearsigned bytes.Buffer
+	if err := ArmoredClearSign(&clearsigned, entity, bytes.NewReader(message), fixedTime()); err != nil {
+		t.Fatalf("clear sign: %v", err)
+	}
+	block, _ := clearsign.Decode(clearsigned.Bytes())
+	if block == nil {
+		t.Fatal("decode clearsigned message")
+	}
+	if !bytes.Equal(block.Plaintext, message) {
+		t.Fatalf("clearsigned plaintext mismatch:\n got %q\nwant %q", block.Plaintext, message)
+	}
+	if _, err := openpgp.CheckDetachedSignature(keyring, bytes.NewReader(block.Bytes), block.ArmoredSignature.Body); err != nil {
+		t.Fatalf("verify clearsigned message: %v", err)
+	}
+}
+
+func TestArmoredClearSignVerifiesWithGPGWhenAvailable(t *testing.T) {
+	if _, err := exec.LookPath("gpg"); err != nil {
+		t.Skip("gpg not installed")
+	}
+	entity := testEntity(t)
+	dir, err := os.MkdirTemp("/tmp", "ipclr-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	messagePath := filepath.Join(dir, "Release")
+	inreleasePath := filepath.Join(dir, "InRelease")
+	keyPath := filepath.Join(dir, "intentproof.gpg")
+	message := []byte("Origin: IntentProof\nSuite: stable\n")
+	if err := os.WriteFile(messagePath, message, 0o644); err != nil {
+		t.Fatalf("write message: %v", err)
+	}
+	var publicKey bytes.Buffer
+	if err := ArmoredPublicKey(&publicKey, entity); err != nil {
+		t.Fatalf("export public key: %v", err)
+	}
+	if err := os.WriteFile(keyPath, publicKey.Bytes(), 0o644); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	var clearsigned bytes.Buffer
+	if err := ArmoredClearSign(&clearsigned, entity, bytes.NewReader(message), fixedTime()); err != nil {
+		t.Fatalf("clear sign: %v", err)
+	}
+	if err := os.WriteFile(inreleasePath, clearsigned.Bytes(), 0o644); err != nil {
+		t.Fatalf("write InRelease: %v", err)
+	}
+
+	home := filepath.Join(dir, "gnupg")
+	if err := os.Mkdir(home, 0o700); err != nil {
+		t.Fatalf("mkdir gnupg home: %v", err)
+	}
+	runGPG(t, home, "--import", keyPath)
+	runGPG(t, home, "--verify", inreleasePath)
+}
+
+func TestArmoredClearSignRequiresCreationTime(t *testing.T) {
+	entity := testEntity(t)
+	err := ArmoredClearSign(io.Discard, entity, bytes.NewReader([]byte("metadata")), time.Time{})
+	if err == nil {
+		t.Fatal("expected missing signature creation time to fail")
+	}
+}
 
 func TestArmoredDetachSignVerifiesWithOpenPGP(t *testing.T) {
 	entity := testEntity(t)
