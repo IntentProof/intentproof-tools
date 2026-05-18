@@ -114,15 +114,15 @@ jobs:
           mkdir -p dist
           CGO_ENABLED=0 go build -trimpath -o dist/intentproof-pkg-sign ./cmd/intentproof-pkg-sign
 
-      - name: Sign Release.gpg and export intentproof.gpg
-        env:
-          APT_PKG_SIGN_BIN: ./dist/intentproof-pkg-sign
-        run: ./scripts/sign-apt-metadata.sh
-
       - uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885
         with:
           role-to-assume: arn:aws:iam::036215883469:role/IntentProofAptRepositoryDeployRole
           aws-region: us-east-1
+
+      - name: Sign Release.gpg and export intentproof.gpg
+        env:
+          APT_PKG_SIGN_BIN: ./dist/intentproof-pkg-sign
+        run: ./scripts/sign-apt-metadata.sh
 
       - name: Publish apt repository
         run: ./scripts/publish-apt-repo.sh

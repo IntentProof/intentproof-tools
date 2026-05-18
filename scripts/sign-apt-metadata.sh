@@ -30,7 +30,11 @@ export AWS_REGION="${AWS_REGION:-us-east-1}"
   "$release_path"
 
 if command -v gpg >/dev/null 2>&1; then
-  gpg --batch --no-tty --verify "$release_sig_path" "$release_path"
+  verify_home="$(mktemp -d)"
+  chmod 700 "$verify_home"
+  gpg --homedir "$verify_home" --batch --no-tty --import "$public_key_path"
+  gpg --homedir "$verify_home" --batch --no-tty --verify "$release_sig_path" "$release_path"
+  rm -rf "$verify_home"
 fi
 
 printf 'PASS: signed apt metadata in %s\n' "$repo_root"
