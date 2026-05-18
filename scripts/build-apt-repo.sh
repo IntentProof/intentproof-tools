@@ -19,7 +19,7 @@ codename="${APT_REPO_CODENAME:-stable}"
 component="${APT_REPO_COMPONENT:-main}"
 
 rm -rf "$output_dir" "$work_dir"
-mkdir -p "$output_dir/pool/main/i" "$work_dir"
+mkdir -p "$output_dir/pool/$component/i" "$work_dir"
 
 build_package() {
   local name="$1"
@@ -29,7 +29,7 @@ build_package() {
   local description="$4"
   local root="$work_dir/root-$name-$deb_arch"
   local config="$work_dir/$name-$deb_arch.nfpm.yaml"
-  local target_dir="$output_dir/pool/main/i/$name"
+  local target_dir="$output_dir/pool/$component/i/$name"
 
   rm -rf "$root"
   mkdir -p "$root/usr/bin" "$target_dir"

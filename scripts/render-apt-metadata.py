@@ -67,8 +67,9 @@ def render_packages(
         )
         stanzas.append("\n".join(lines))
     packages_path.write_text("\n\n".join(stanzas) + "\n", encoding="utf-8")
-    with gzip.GzipFile(filename="", mode="wb", fileobj=(package_dir / "Packages.gz").open("wb"), mtime=0) as gz:
-        gz.write(packages_path.read_bytes())
+    with (package_dir / "Packages.gz").open("wb") as compressed:
+        with gzip.GzipFile(filename="", mode="wb", fileobj=compressed, mtime=0) as gz:
+            gz.write(packages_path.read_bytes())
     return packages_path
 
 
