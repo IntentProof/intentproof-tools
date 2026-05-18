@@ -73,3 +73,56 @@ jobs:
         with:
           name: apt-repository-layout
           path: dist/apt
+
+  sign-and-publish-apt-repo:
+    name: "IntentProof Release: Sign and Publish Apt Repository"
+    needs: build-apt-repo
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      APT_REPO_ROOT: dist/apt
+      APT_REPO_CODENAME: stable
+      APT_REPO_S3_BUCKET: intentproof-036215883469-apt-repository
+      APT_CLOUDFRONT_DISTRIBUTION_ID: E3PQM792MP2Z8V
+      INTENTPROOF_PKG_SIGN_KMS_KEY_ID: arn:aws:kms:us-east-1:036215883469:key/09f010c0-5b6c-49a0-ba7f-f0e7b3d2b754
+      INTENTPROOF_PKG_SIGN_CREATED_AT: "2026-05-18T05:10:00Z"
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apt-repository-layout
+          path: dist/apt
+
+      - name: Install verification tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+
+      - name: Build package signing helper
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          CGO_ENABLED=0 go build -trimpath -o dist/intentproof-pkg-sign ./cmd/intentproof-pkg-sign
+
+      - name: Sign Release.gpg and export intentproof.gpg
+        env:
+          APT_PKG_SIGN_BIN: ./dist/intentproof-pkg-sign
+        run: ./scripts/sign-apt-metadata.sh
+
+      - uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885
+        with:
+          role-to-assume: arn:aws:iam::036215883469:role/IntentProofAptRepositoryDeployRole
+          aws-region: us-east-1
+
+      - name: Publish apt repository
+        run: ./scripts/publish-apt-repo.sh
