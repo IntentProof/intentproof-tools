@@ -33,6 +33,8 @@ func TestRunLocalDevLoopIngestAndDashboard(t *testing.T) {
 		OpenBrowser:   false,
 	}
 
+	dashboardBase := fmt.Sprintf("http://127.0.0.1:%d", dashboardPort)
+
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -44,12 +46,18 @@ func TestRunLocalDevLoopIngestAndDashboard(t *testing.T) {
 		case <-done:
 		case <-time.After(5 * time.Second):
 			t.Errorf("RunLocalDevLoop did not exit after cancel")
+			return
+		}
+		client := &http.Client{Timeout: 500 * time.Millisecond}
+		resp, err := client.Get(dashboardBase + "/healthz")
+		if err == nil {
+			_ = resp.Body.Close()
+			t.Errorf("dashboard still serving after shutdown: status=%d", resp.StatusCode)
 		}
 	})
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	ingestBase := fmt.Sprintf("http://127.0.0.1:%d", ingestPort)
-	dashboardBase := fmt.Sprintf("http://127.0.0.1:%d", dashboardPort)
 	verifierBase := fmt.Sprintf("http://127.0.0.1:%d", verifierPort)
 
 	waitHTTP200(t, client, ingestBase+"/healthz")

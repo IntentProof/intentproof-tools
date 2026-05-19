@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 )
 
 // LocalDevConfig configures the local ingest, verifier, dashboard, and flow builder.
@@ -83,24 +85,29 @@ func RunLocalDevLoop(ctx context.Context, cfg LocalDevConfig) error {
 	logf("starting verifier on " + verifierAddr)
 	logf("starting dashboard on " + dashboardAddr)
 
-	errCh := make(chan error, 4)
-	ingestServer := &http.Server{Addr: ingestAddr, Handler: ingestSrv.Handler()}
+	servers := []*http.Server{
+		{Addr: ingestAddr, Handler: ingestSrv.Handler()},
+		{Addr: verifierAddr, Handler: LocalVerifierHandler()},
+		{Addr: dashboardAddr, Handler: LocalDashboardHandler(db, dashLinks)},
+	}
 
-	go func() {
-		if err := ingestServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errCh <- fmt.Errorf("ingest server: %w", err)
-		}
-	}()
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(servers)+1)
+	for _, srv := range servers {
+		wg.Add(1)
+		go func(server *http.Server) {
+			defer wg.Done()
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				errCh <- err
+			}
+		}(srv)
+	}
 
+	flowDone := make(chan struct{})
 	go func() {
-		if err := http.ListenAndServe(verifierAddr, LocalVerifierHandler()); err != nil {
-			errCh <- fmt.Errorf("verifier server: %w", err)
-		}
-	}()
-
-	go func() {
-		if err := http.ListenAndServe(dashboardAddr, LocalDashboardHandler(db, dashLinks)); err != nil {
-			errCh <- fmt.Errorf("dashboard server: %w", err)
+		defer close(flowDone)
+		if err := flowBuilder.Run(ctx); err != nil && err != context.Canceled {
+			errCh <- fmt.Errorf("flow builder: %w", err)
 		}
 	}()
 
@@ -108,18 +115,22 @@ func RunLocalDevLoop(ctx context.Context, cfg LocalDevConfig) error {
 		MaybeOpenLocalDashboard(dashboardURL)
 	}
 
-	go func() {
-		if err := flowBuilder.Run(ctx); err != nil && err != context.Canceled {
-			errCh <- fmt.Errorf("flow builder: %w", err)
-		}
-	}()
-
+	var runErr error
 	select {
 	case <-ctx.Done():
-		_ = ingestServer.Close()
-		return nil
-	case err := <-errCh:
-		_ = ingestServer.Close()
-		return err
+	case runErr = <-errCh:
 	}
+
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelShutdown()
+	for _, srv := range servers {
+		_ = srv.Shutdown(shutdownCtx)
+	}
+	wg.Wait()
+	<-flowDone
+
+	if runErr != nil {
+		return runErr
+	}
+	return nil
 }
