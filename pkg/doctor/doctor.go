@@ -308,7 +308,7 @@ func checkLocalLoop(ctx context.Context, client *http.Client) []Check {
 		if err != nil {
 			out = append(out, Check{
 				Name:   svc.name,
-				Status: StatusFail,
+				Status: StatusWarn,
 				Detail: svc.base + " not reachable: " + err.Error(),
 				Hint:   "start the local loop: intentproof local",
 			})

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestResolveIngestURL(t *testing.T) {
@@ -150,6 +151,26 @@ func TestFormatAgentMarkdownIncludesChecks(t *testing.T) {
 	out := FormatAgentMarkdown(r)
 	if !strings.Contains(out, "# IntentProof doctor report") || !strings.Contains(out, "sdk ingest") {
 		t.Fatalf("out=%q", out)
+	}
+}
+
+func TestRunFreshMachineLocalLoopWarnsOnly(t *testing.T) {
+	t.Setenv("INTENTPROOF_INGEST_URL", "")
+	t.Setenv("INTENTPROOF_USE_LOCAL_INGEST", "")
+
+	home := t.TempDir()
+	report := Run(context.Background(), Options{
+		HomeDir: home,
+		Cwd:     t.TempDir(),
+		Client:  &http.Client{Timeout: 100 * time.Millisecond},
+	})
+	if report.HasFailures() {
+		t.Fatalf("fresh machine should not fail doctor, got %+v", report.Checks)
+	}
+	for _, c := range report.Checks {
+		if c.Name == "local ingest" && c.Status != StatusWarn {
+			t.Fatalf("expected local ingest warn, got %+v", c)
+		}
 	}
 }
 
