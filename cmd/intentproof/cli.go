@@ -17,7 +17,7 @@ func writeUnknownCommand(stderr io.Writer, label, cmd string) {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
-		writeUsage(stderr, "Usage: intentproof <command>\nCommands: demo, local, policy, reference, verify")
+		writeUsage(stderr, "Usage: intentproof <command>\nCommands: demo, init, local, policy, reference, verify")
 		return 1
 	}
 
@@ -27,6 +27,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 0
 	case "demo":
 		return runDemo(args[1:], stdout, stderr)
+	case "init":
+		return runInit(args[1:], stdout, stderr)
 	case "local":
 		if err := startLocalServer(); err != nil {
 			fmt.Fprintf(stderr, "local server failed: %v\n", err)
