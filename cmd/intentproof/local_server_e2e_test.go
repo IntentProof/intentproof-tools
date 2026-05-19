@@ -26,6 +26,17 @@ func TestStartLocalServerWithContext(t *testing.T) {
 	go func() {
 		done <- startLocalServerWithContext(ctx)
 	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("startLocalServerWithContext: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("startLocalServerWithContext did not exit after cancel")
+		}
+	})
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	deadline := time.Now().Add(10 * time.Second)
@@ -35,15 +46,11 @@ func TestStartLocalServerWithContext(t *testing.T) {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				cancel()
-				if err := <-done; err != nil {
-					t.Fatalf("startLocalServerWithContext: %v", err)
-				}
 				return
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	cancel()
 	t.Fatal("local stack did not become ready")
 }
 

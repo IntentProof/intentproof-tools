@@ -2,6 +2,7 @@ package localloop
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -14,15 +15,22 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func withBrowserRecorder(t *testing.T) (called *string, restore func()) {
+func withBrowserRecorder(t *testing.T) (getURL func() string, restore func()) {
 	t.Helper()
 	prev := launchBrowser
-	url := ""
+	var mu sync.Mutex
+	var url string
 	launchBrowser = func(u string) error {
+		mu.Lock()
 		url = u
+		mu.Unlock()
 		return nil
 	}
-	return &url, func() { launchBrowser = prev }
+	return func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return url
+	}, func() { launchBrowser = prev }
 }
 
 func waitForScheduledBrowserOpen(t *testing.T) {

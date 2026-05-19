@@ -100,7 +100,7 @@ func RunLocalDevLoop(ctx context.Context, cfg LocalDevConfig) error {
 		go func(server *http.Server) {
 			defer wg.Done()
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				errCh <- err
+				errCh <- fmt.Errorf("%s: %w", server.Addr, err)
 			}
 		}(srv)
 	}
@@ -131,7 +131,13 @@ func RunLocalDevLoop(ctx context.Context, cfg LocalDevConfig) error {
 		_ = srv.Shutdown(shutdownCtx)
 	}
 	wg.Wait()
-	<-flowDone
+	select {
+	case <-flowDone:
+	case <-time.After(5 * time.Second):
+		if runErr == nil {
+			runErr = fmt.Errorf("flow builder did not stop in time")
+		}
+	}
 
 	if runErr != nil {
 		return runErr

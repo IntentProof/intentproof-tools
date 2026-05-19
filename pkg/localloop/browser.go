@@ -25,8 +25,9 @@ func MaybeOpenLocalDashboard(dashboardOrigin string) {
 		return
 	}
 	url := strings.TrimSuffix(strings.TrimSpace(dashboardOrigin), "/") + "/"
+	open := launchBrowser
 	time.AfterFunc(400*time.Millisecond, func() {
-		_ = launchBrowser(url)
+		_ = open(url)
 	})
 }
 

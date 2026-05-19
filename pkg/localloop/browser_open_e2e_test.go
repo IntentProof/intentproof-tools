@@ -9,7 +9,7 @@ func TestMaybeOpenLocalDashboardEnabled(t *testing.T) {
 		t.Fatal("expected enabled")
 	}
 
-	called, restore := withBrowserRecorder(t)
+	getURL, restore := withBrowserRecorder(t)
 	defer restore()
 
 	attempted, err := OpenLocalDashboardBrowser("http://127.0.0.1:19999")
@@ -19,16 +19,16 @@ func TestMaybeOpenLocalDashboardEnabled(t *testing.T) {
 	if !attempted {
 		t.Fatal("expected launch attempt")
 	}
-	if *called != "http://127.0.0.1:19999/" {
-		t.Fatalf("url=%q", *called)
+	if got := getURL(); got != "http://127.0.0.1:19999/" {
+		t.Fatalf("url=%q", got)
 	}
 
-	called2, restore2 := withBrowserRecorder(t)
+	getURL2, restore2 := withBrowserRecorder(t)
 	defer restore2()
 	MaybeOpenLocalDashboard("http://127.0.0.1:19998")
 	waitForScheduledBrowserOpen(t)
-	if *called2 != "http://127.0.0.1:19998/" {
-		t.Fatalf("scheduled url=%q", *called2)
+	if got := getURL2(); got != "http://127.0.0.1:19998/" {
+		t.Fatalf("scheduled url=%q", got)
 	}
 }
 
