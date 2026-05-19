@@ -157,11 +157,18 @@ func (n *NATSWrapper) SubscribeFlowMaterialized(handler nats.MsgHandler) (*nats.
 
 // Shutdown cleanly stops the NATS server and client.
 func (n *NATSWrapper) Shutdown() {
+	if n == nil {
+		return
+	}
 	if n.Client != nil {
 		_ = n.Client.Drain()
 		n.Client.Close()
+		n.Client = nil
 	}
 	if n.Server != nil {
 		n.Server.Shutdown()
+		n.Server.WaitForShutdown()
+		n.Server = nil
 	}
+	n.js = nil
 }

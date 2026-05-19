@@ -23,7 +23,7 @@ func TestRunLocalDevLoopIngestAndDashboard(t *testing.T) {
 	dashboardPort := freeTCPPort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(cancel)
 
 	cfg := LocalDevConfig{
 		HomeDir:       home,
@@ -33,9 +33,19 @@ func TestRunLocalDevLoopIngestAndDashboard(t *testing.T) {
 		OpenBrowser:   false,
 	}
 
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		_ = RunLocalDevLoop(ctx, cfg)
 	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Errorf("RunLocalDevLoop did not exit after cancel")
+		}
+	})
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	ingestBase := fmt.Sprintf("http://127.0.0.1:%d", ingestPort)
@@ -76,7 +86,6 @@ func TestRunLocalDevLoopIngestAndDashboard(t *testing.T) {
 			b, _ := io.ReadAll(dresp.Body)
 			_ = dresp.Body.Close()
 			if dresp.StatusCode == http.StatusOK && bytes.Contains(b, []byte("corr_stack")) {
-				cancel()
 				return
 			}
 		}
