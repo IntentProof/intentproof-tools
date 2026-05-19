@@ -44,6 +44,12 @@ RELEASE_APT_WORKFLOW = Path(
         ROOT / ".github" / "workflows" / "release-apt.yml",
     )
 )
+RELEASE_RPM_WORKFLOW = Path(
+    os.environ.get(
+        "INTENTPROOF_RELEASE_RPM_WORKFLOW",
+        ROOT / ".github" / "workflows" / "release-rpm.yml",
+    )
+)
 GORELEASER_CONFIG = Path(
     os.environ.get("INTENTPROOF_GORELEASER_CONFIG", ROOT / ".goreleaser.yaml")
 )
@@ -194,6 +200,29 @@ RELEASE_APT_REQUIRED_SNIPPETS = [
     "dist/apt",
 ]
 
+RELEASE_RPM_REQUIRED_SNIPPETS = [
+    "release:",
+    "types: [published]",
+    "workflow_dispatch:",
+    "IntentProof Release: Build RPM Repository",
+    "IntentProof Release: Sign and Publish RPM Repository",
+    "git checkout --detach",
+    "github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.46.3",
+    "scripts/build-rpm-repo.sh",
+    "scripts/sign-rpm-metadata.sh",
+    "scripts/publish-rpm-repo.sh",
+    "createrepo-c",
+    "intentproof-pkg-sign",
+    "repomd.xml",
+    "intentproof.gpg",
+    "configure-aws-credentials",
+    "IntentProofRpmRepositoryDeployRole",
+    "id-token: write",
+    "if: github.event_name != 'workflow_dispatch'",
+    "rpm-repository-layout",
+    "dist/rpm",
+]
+
 GORELEASER_REQUIRED_SNIPPETS = [
     "version: 2",
     "project_name: intentproof-tools",
@@ -315,6 +344,11 @@ def main() -> int:
             RELEASE_APT_WORKFLOW,
             RELEASE_APT_REQUIRED_SNIPPETS,
             "release apt workflow",
+        ),
+        (
+            RELEASE_RPM_WORKFLOW,
+            RELEASE_RPM_REQUIRED_SNIPPETS,
+            "release rpm workflow",
         ),
         (GORELEASER_CONFIG, GORELEASER_REQUIRED_SNIPPETS, "GoReleaser config"),
         (

@@ -1,0 +1,127 @@
+name: release rpm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: GitHub Release tag to package for a dry run.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-rpm-repo:
+    name: "IntentProof Release: Build RPM Repository"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve release metadata
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            release_tag="$INPUT_RELEASE_TAG"
+          else
+            release_tag="$EVENT_RELEASE_TAG"
+          fi
+          [[ "$release_tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+ ]] || {
+            echo "release_tag must start with a SemVer tag such as v1.2.3" >&2
+            exit 1
+          }
+          git fetch --tags --force origin "$release_tag"
+          release_commit="$(git rev-list -n 1 "$release_tag")"
+          source_date_epoch="$(git log -1 --format=%ct "$release_commit")"
+          git checkout --detach "$release_commit"
+          {
+            echo "release_tag=$release_tag"
+            echo "release_version=${release_tag#v}"
+            echo "release_commit=$release_commit"
+            echo "source_date_epoch=$source_date_epoch"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install package tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y createrepo-c rpm
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.46.3
+
+      - name: Build RPM repository layout
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+          SOURCE_DATE_EPOCH: ${{ steps.release.outputs.source_date_epoch }}
+        run: ./scripts/build-rpm-repo.sh
+
+      - name: Upload RPM repository artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-repository-layout
+          path: dist/rpm
+
+  sign-and-publish-rpm-repo:
+    name: "IntentProof Release: Sign and Publish RPM Repository"
+    needs: build-rpm-repo
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RPM_REPO_ROOT: dist/rpm
+      RPM_REPO_S3_BUCKET: intentproof-036215883469-rpm-repository
+      RPM_CLOUDFRONT_DISTRIBUTION_ID: E16XF76XHMRJ04
+      INTENTPROOF_PKG_SIGN_KMS_KEY_ID: arn:aws:kms:us-east-1:036215883469:key/09f010c0-5b6c-49a0-ba7f-f0e7b3d2b754
+      INTENTPROOF_PKG_SIGN_CREATED_AT: "2026-05-18T05:10:00Z"
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-repository-layout
+          path: dist/rpm
+
+      - name: Install verification tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+
+      - name: Build package signing helper
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          CGO_ENABLED=0 go build -trimpath -o dist/intentproof-pkg-sign ./cmd/intentproof-pkg-sign
+
+      - uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885
+        with:
+          role-to-assume: arn:aws:iam::036215883469:role/IntentProofRpmRepositoryDeployRole
+          aws-region: us-east-1
+
+      - name: Sign repomd.xml and export intentproof.gpg
+        env:
+          RPM_PKG_SIGN_BIN: ./dist/intentproof-pkg-sign
+        run: ./scripts/sign-rpm-metadata.sh
+
+      - name: Publish RPM repository
+        run: ./scripts/publish-rpm-repo.sh
