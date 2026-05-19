@@ -52,6 +52,12 @@ func TestFormatStripeRefundAgentMarkdown(t *testing.T) {
 	if !strings.Contains(out, "## Path 3 wedge steps") {
 		t.Fatalf("expected path 3 section, got:\n%s", out)
 	}
+	if strings.Contains(out, "# IntentProof implementation guide") {
+		t.Fatalf("expected a single H1, got duplicate title in:\n%s", out)
+	}
+	if !strings.HasPrefix(out, "# IntentProof Stripe Refund Proof") {
+		t.Fatalf("expected stripe H1, got:\n%s", out)
+	}
 }
 
 func TestAgentCommandFromStep(t *testing.T) {
