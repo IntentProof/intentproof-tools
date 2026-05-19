@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/openpgpkms"
-	"golang.org/x/crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp"
 )
 
 func main() {
