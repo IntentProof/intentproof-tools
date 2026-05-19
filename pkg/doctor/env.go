@@ -7,7 +7,7 @@ import (
 	"github.com/intentproof/intentproof-tools/pkg/localloop"
 )
 
-const defaultLocalIngestEventsURL = "http://127.0.0.1:9787/v1/events"
+const defaultLocalIngestEventsURL = "http://localhost:9787/v1/events"
 
 // ResolveIngestURL mirrors the Node SDK ingest URL resolution.
 func ResolveIngestURL() (url string, source string) {

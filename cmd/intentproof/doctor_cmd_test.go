@@ -17,6 +17,18 @@ func TestDoctorCommandUsage(t *testing.T) {
 	}
 }
 
+func TestDoctorCommandAgentMarkdown(t *testing.T) {
+	var stdout strings.Builder
+	var stderr strings.Builder
+	code := run([]string{"doctor", "--agent"}, &stdout, &stderr)
+	if code != 0 && code != 1 {
+		t.Fatalf("unexpected exit code %d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "# IntentProof doctor report") {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+}
+
 func TestDoctorCommandRuns(t *testing.T) {
 	var stdout strings.Builder
 	var stderr strings.Builder

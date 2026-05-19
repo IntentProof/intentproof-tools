@@ -9,9 +9,11 @@ for Tier 2 commands lives in
 
 - Unknown top-level command returns exit code `1` and prints `Unknown command: <name>` to stderr.
 - `intentproof doctor` with extra arguments returns exit code `1` and prints
-  `Usage: intentproof doctor` to stderr.
+  `Usage: intentproof doctor [--agent]` to stderr.
 - `intentproof doctor` exits `1` when any check has status fail; exits `0` when
   checks are ok, warn, or skip only.
+- `intentproof doctor --agent` (or `INTENTPROOF_AGENT=1`) prints markdown for
+  coding agents.
 - `intentproof init` performs offline, read-only project detection and prints
   `Detected`, `Recommended setup`, and `Next` sections.
 - `intentproof init --template stripe-refund` prints the preview wedge outline

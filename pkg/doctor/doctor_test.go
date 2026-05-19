@@ -35,6 +35,24 @@ func TestAdvisePresetEmpty(t *testing.T) {
 	}
 }
 
+func TestAdvisePresetDemoActionsMatchNotificationPreset(t *testing.T) {
+	observed := map[string]struct{}{
+		"payments.refund.execute": {},
+		"ledger.entry.write":      {},
+		"customer.notify":         {},
+	}
+	advice := advisePreset(observed)
+	if advice.Status != StatusOK || !strings.Contains(advice.Summary, "refund-with-notification") {
+		t.Fatalf("got %+v", advice)
+	}
+}
+
+func TestIngestURLsEquivalentLocalhostAndLoopback(t *testing.T) {
+	if !ingestURLsEquivalent("http://127.0.0.1:9787/v1/events", "http://localhost:9787/v1/events") {
+		t.Fatal("expected localhost and 127.0.0.1 to match")
+	}
+}
+
 func TestAdvisePresetFullRefundNotification(t *testing.T) {
 	observed := map[string]struct{}{
 		"payments.refund.execute": {},
@@ -123,6 +141,16 @@ func TestRunReferencePoliciesFromWorkspace(t *testing.T) {
 		}
 	}
 	t.Fatalf("expected reference policies ok, got %+v", report.Checks)
+}
+
+func TestFormatAgentMarkdownIncludesChecks(t *testing.T) {
+	r := Report{Checks: []Check{{
+		Name: "sdk ingest", Status: StatusOK, Detail: "configured",
+	}}}
+	out := FormatAgentMarkdown(r)
+	if !strings.Contains(out, "# IntentProof doctor report") || !strings.Contains(out, "sdk ingest") {
+		t.Fatalf("out=%q", out)
+	}
 }
 
 func TestFormatReportMarksFailures(t *testing.T) {

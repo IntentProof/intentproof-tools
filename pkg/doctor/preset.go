@@ -12,6 +12,12 @@ type presetRule struct {
 	required    []string
 }
 
+// presetActionAliases maps canonical preset actions to common demo/app variants.
+var presetActionAliases = map[string][]string{
+	"ledger.refund.record":   {"ledger.entry.write"},
+	"customer.notify.refund": {"customer.notify"},
+}
+
 // refundPresets matches onboarding preset labels in references/16-onboarding.md.
 var refundPresets = []presetRule{
 	{
@@ -105,7 +111,7 @@ func advisePreset(observed map[string]struct{}) presetAdvice {
 func countPresent(required []string, observed map[string]struct{}) int {
 	n := 0
 	for _, action := range required {
-		if _, ok := observed[action]; ok {
+		if observedHasAction(observed, action) {
 			n++
 		}
 	}
@@ -115,11 +121,23 @@ func countPresent(required []string, observed map[string]struct{}) int {
 func missingRequired(required []string, observed map[string]struct{}) []string {
 	out := make([]string, 0)
 	for _, action := range required {
-		if _, ok := observed[action]; !ok {
+		if !observedHasAction(observed, action) {
 			out = append(out, action)
 		}
 	}
 	return out
+}
+
+func observedHasAction(observed map[string]struct{}, required string) bool {
+	if _, ok := observed[required]; ok {
+		return true
+	}
+	for _, alias := range presetActionAliases[required] {
+		if _, ok := observed[alias]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func formatActionSample(observed map[string]struct{}, limit int) string {

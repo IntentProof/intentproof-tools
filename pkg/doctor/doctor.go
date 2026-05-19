@@ -83,7 +83,7 @@ func Run(ctx context.Context, opts Options) Report {
 	checks := make([]Check, 0, 16)
 	checks = append(checks, checkSDKConfig()...)
 	checks = append(checks, checkReferencePolicies(cwd)...)
-	checks = append(checks, checkLocalData(home)...)
+	checks = append(checks, checkLocalData(ctx, home)...)
 	checks = append(checks, checkLocalLoop(ctx, opts.Client)...)
 	return Report{Checks: checks}
 }
@@ -159,7 +159,7 @@ func checkReferencePolicies(cwd string) []Check {
 	}}
 }
 
-func checkLocalData(home string) []Check {
+func checkLocalData(ctx context.Context, home string) []Check {
 	dataDir := LocalDataDir(home)
 	dbPath := filepath.Join(dataDir, "local.db")
 	keyPath := SDKKeypairPath(home)
@@ -233,9 +233,13 @@ func checkLocalData(home string) []Check {
 		return out
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	snap, err := inspectLocalDB(ctx, dbPath)
+	dbCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		dbCtx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+	}
+	snap, err := inspectLocalDB(dbCtx, dbPath)
 	if err != nil {
 		out = append(out, Check{
 			Name:   "local database",
@@ -333,7 +337,7 @@ func checkLocalLoop(ctx context.Context, client *http.Client) []Check {
 	}
 
 	want := strings.TrimRight(ingestBase, "/") + "/v1/events"
-	if ingestURL != want {
+	if !ingestURLsEquivalent(ingestURL, want) {
 		out = append(out, Check{
 			Name:   "ingest alignment",
 			Status: StatusWarn,
@@ -364,22 +368,12 @@ func FormatReport(r Report) string {
 	} else {
 		b.WriteString("No blocking failures. Next: wrap a function, run your app, or try: intentproof demo refund\n")
 	}
+	b.WriteString("For agent-oriented output: intentproof doctor --agent\n")
 	return b.String()
 }
 
 func formatCheckLine(c Check) string {
-	tag := string(c.Status)
-	switch c.Status {
-	case StatusOK:
-		tag = "ok"
-	case StatusWarn:
-		tag = "warn"
-	case StatusFail:
-		tag = "fail"
-	case StatusSkip:
-		tag = "skip"
-	}
-	line := fmt.Sprintf("[%s] %s: %s", tag, c.Name, c.Detail)
+	line := fmt.Sprintf("[%s] %s: %s", string(c.Status), c.Name, c.Detail)
 	if c.Hint != "" {
 		line += "\n      → " + c.Hint
 	}
