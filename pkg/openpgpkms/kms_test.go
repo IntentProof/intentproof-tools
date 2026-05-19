@@ -1,6 +1,7 @@
 package openpgpkms
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -8,10 +9,14 @@ import (
 	"crypto/sha512"
 	"crypto/x509"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
+	"github.com/ProtonMail/go-crypto/openpgp"
 )
 
 func TestKMSSignerUsesSHA512DigestSigning(t *testing.T) {
@@ -52,7 +57,8 @@ func TestKMSSignerRejectsNonSHA512Digest(t *testing.T) {
 	}
 }
 
-func TestNewEntityWithKMSSigner(t *testing.T) {
+func kmsTestEntity(t *testing.T) (*rsa.PrivateKey, *KMSSigner, *openpgp.Entity) {
+	t.Helper()
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate rsa key: %v", err)
@@ -76,6 +82,11 @@ func TestNewEntityWithKMSSigner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new entity from kms signer: %v", err)
 	}
+	return priv, kmsSigner, entity
+}
+
+func TestNewEntityWithKMSSigner(t *testing.T) {
+	_, _, entity := kmsTestEntity(t)
 	identity := entity.PrimaryIdentity()
 	if identity == nil || identity.SelfSignature == nil {
 		t.Fatal("expected primary identity self-signature")
@@ -83,6 +94,57 @@ func TestNewEntityWithKMSSigner(t *testing.T) {
 	if len(identity.SelfSignature.IssuerFingerprint) == 0 {
 		t.Fatal("expected issuer fingerprint subpacket on kms-backed self-signature")
 	}
+}
+
+func TestKMSSignerArmoredClearSignVerifiesWithGPGWhenAvailable(t *testing.T) {
+	if _, err := exec.LookPath("gpg"); err != nil {
+		t.Skip("gpg not installed")
+	}
+	_, _, entity := kmsTestEntity(t)
+
+	dir, err := os.MkdirTemp("/tmp", "ipkmsclr-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	message := []byte("Origin: IntentProof\nSuite: stable\n")
+	messagePath := filepath.Join(dir, "Release")
+	inreleasePath := filepath.Join(dir, "InRelease")
+	releaseSigPath := filepath.Join(dir, "Release.gpg")
+	keyPath := filepath.Join(dir, "intentproof.gpg")
+	if err := os.WriteFile(messagePath, message, 0o644); err != nil {
+		t.Fatalf("write message: %v", err)
+	}
+	var publicKey bytes.Buffer
+	if err := ArmoredPublicKey(&publicKey, entity); err != nil {
+		t.Fatalf("export public key: %v", err)
+	}
+	if err := os.WriteFile(keyPath, publicKey.Bytes(), 0o644); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	var releaseSig bytes.Buffer
+	if err := ArmoredDetachSign(&releaseSig, entity, bytes.NewReader(message), fixedTime()); err != nil {
+		t.Fatalf("detach sign: %v", err)
+	}
+	if err := os.WriteFile(releaseSigPath, releaseSig.Bytes(), 0o644); err != nil {
+		t.Fatalf("write release signature: %v", err)
+	}
+	var clearsigned bytes.Buffer
+	if err := ArmoredClearSign(&clearsigned, entity, bytes.NewReader(message), fixedTime()); err != nil {
+		t.Fatalf("clear sign: %v", err)
+	}
+	if err := os.WriteFile(inreleasePath, clearsigned.Bytes(), 0o644); err != nil {
+		t.Fatalf("write InRelease: %v", err)
+	}
+
+	home := filepath.Join(dir, "gnupg")
+	if err := os.Mkdir(home, 0o700); err != nil {
+		t.Fatalf("mkdir gnupg home: %v", err)
+	}
+	runGPG(t, home, "--import", keyPath)
+	runGPG(t, home, "--verify", releaseSigPath, messagePath)
+	runGPG(t, home, "--verify", inreleasePath)
 }
 
 type fakeKMSClient struct {

@@ -29,6 +29,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runClearSign(args[1:], stdout, stderr)
 	case "export-public-key":
 		return runExportPublicKey(args[1:], stdout, stderr)
+	case "verify-apt-metadata":
+		return runVerifyAptMetadata(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "Unknown command: %s\n", args[0])
 		writeUsage(stderr)
@@ -152,6 +154,33 @@ func runExportPublicKey(args []string, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
+func runVerifyAptMetadata(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("intentproof-pkg-sign verify-apt-metadata", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var publicKeyPath string
+	var releasePath string
+	var releaseSigPath string
+	var inreleasePath string
+	fs.StringVar(&publicKeyPath, "public-key", "", "exported OpenPGP public key")
+	fs.StringVar(&releasePath, "release", "", "path to Release file")
+	fs.StringVar(&releaseSigPath, "release-sig", "", "path to Release.gpg")
+	fs.StringVar(&inreleasePath, "inrelease", "", "path to InRelease")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+	if strings.TrimSpace(publicKeyPath) == "" || strings.TrimSpace(releasePath) == "" ||
+		strings.TrimSpace(releaseSigPath) == "" || strings.TrimSpace(inreleasePath) == "" {
+		fmt.Fprintln(stderr, "error: --public-key, --release, --release-sig, and --inrelease are required")
+		return 1
+	}
+	if err := openpgpkms.VerifyAptMetadataFiles(publicKeyPath, releasePath, releaseSigPath, inreleasePath); err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "PASS: verified apt metadata signatures")
+	return 0
+}
+
 type commandOptions struct {
 	keyID     string
 	name      string
@@ -230,4 +259,5 @@ func writeUsage(stderr io.Writer) {
 	fmt.Fprintln(stderr, "  sign --kms-key-id <key> --created-at <rfc3339> --output <file.asc> <file>")
 	fmt.Fprintln(stderr, "  clearsign --kms-key-id <key> --created-at <rfc3339> --output <file> <file>")
 	fmt.Fprintln(stderr, "  export-public-key --kms-key-id <key> --created-at <rfc3339> --output <key.asc>")
+	fmt.Fprintln(stderr, "  verify-apt-metadata --public-key <key> --release <file> --release-sig <file> --inrelease <file>")
 }
