@@ -52,6 +52,39 @@ func TestKMSSignerRejectsNonSHA512Digest(t *testing.T) {
 	}
 }
 
+func TestNewEntityWithKMSSigner(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate rsa key: %v", err)
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	if err != nil {
+		t.Fatalf("marshal public key: %v", err)
+	}
+	kmsSigner, err := NewKMSSignerFromClient(context.Background(), &fakeKMSClient{
+		priv:      priv,
+		publicDER: publicDER,
+	}, "alias/intentproof/pkg-repo")
+	if err != nil {
+		t.Fatalf("new kms signer: %v", err)
+	}
+	entity, err := NewEntity(kmsSigner, EntityOptions{
+		Name:      DefaultName,
+		Email:     DefaultEmail,
+		CreatedAt: fixedTime(),
+	})
+	if err != nil {
+		t.Fatalf("new entity from kms signer: %v", err)
+	}
+	identity := entity.PrimaryIdentity()
+	if identity == nil || identity.SelfSignature == nil {
+		t.Fatal("expected primary identity self-signature")
+	}
+	if len(identity.SelfSignature.IssuerFingerprint) == 0 {
+		t.Fatal("expected issuer fingerprint subpacket on kms-backed self-signature")
+	}
+}
+
 type fakeKMSClient struct {
 	priv          *rsa.PrivateKey
 	publicDER     []byte

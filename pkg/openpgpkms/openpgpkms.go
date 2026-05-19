@@ -52,7 +52,10 @@ func NewEntity(signer crypto.Signer, opts EntityOptions) (*openpgp.Entity, error
 	if uid == nil {
 		return nil, fmt.Errorf("invalid OpenPGP user ID components")
 	}
-	privateKey := packet.NewSignerPrivateKey(createdAt, signer)
+	privateKey, err := newSignerPrivateKey(createdAt, signer)
+	if err != nil {
+		return nil, err
+	}
 	if privateKey.PubKeyAlgo != packet.PubKeyAlgoRSA {
 		return nil, fmt.Errorf("OpenPGP package signing requires RSA, got %v", privateKey.PubKeyAlgo)
 	}
@@ -84,6 +87,23 @@ func NewEntity(signer crypto.Signer, opts EntityOptions) (*openpgp.Entity, error
 		Signatures:    []*packet.Signature{selfSig},
 	}
 	return entity, nil
+}
+
+// newSignerPrivateKey wraps an RSA crypto.Signer for OpenPGP signing. ProtonMail
+// go-crypto only accepts concrete *rsa.PrivateKey values in NewSignerPrivateKey,
+// so external signers such as KMSSigner are wired manually.
+func newSignerPrivateKey(createdAt time.Time, signer crypto.Signer) (*packet.PrivateKey, error) {
+	if rsaPriv, ok := signer.(*rsa.PrivateKey); ok {
+		return packet.NewSignerPrivateKey(createdAt, rsaPriv), nil
+	}
+	rsaPub, ok := signer.Public().(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("OpenPGP package signing requires an RSA public key")
+	}
+	return &packet.PrivateKey{
+		PublicKey:  *packet.NewRSAPublicKey(createdAt, rsaPub),
+		PrivateKey: signer,
+	}, nil
 }
 
 // ArmoredPublicKey writes an ASCII-armored OpenPGP public key block.
