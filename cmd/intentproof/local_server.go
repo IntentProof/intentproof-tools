@@ -3,41 +3,24 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/intentproof/intentproof-tools/pkg/localloop"
 )
 
 func startLocalServer() error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	return startLocalServerWithContext(ctx)
+}
+
+func startLocalServerWithContext(ctx context.Context) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("home dir: %w", err)
 	}
-	dataDir := filepath.Join(home, ".intentproof", "local")
-	if err := os.MkdirAll(dataDir, 0o700); err != nil {
-		return fmt.Errorf("create data dir: %w", err)
-	}
-
-	dbPath := filepath.Join(dataDir, "local.db")
-	db, err := localloop.OpenDB(dbPath)
-	if err != nil {
-		return fmt.Errorf("open db: %w", err)
-	}
-	defer db.Close()
-
-	if err := localloop.BootstrapLocalRegistry(context.Background(), db, home); err != nil {
-		return fmt.Errorf("bootstrap local sdk registry: %w", err)
-	}
-
-	nats, err := localloop.StartEmbeddedNATS(dataDir)
-	if err != nil {
-		return fmt.Errorf("start nats: %w", err)
-	}
-	defer nats.Shutdown()
 
 	ingestAddr := ":9787"
 	if v := os.Getenv("INTENTPROOF_LOCAL_INGEST_ADDR"); v != "" {
@@ -52,78 +35,19 @@ func startLocalServer() error {
 		dashboardAddr = v
 	}
 
-	ingestURL := localloop.LocalPublicBaseURL(ingestAddr)
-	verifierURL := localloop.LocalPublicBaseURL(verifierAddr)
-	dashboardURL := localloop.LocalPublicBaseURL(dashboardAddr)
-
-	dashLinks := localloop.LocalDashboardLinks{
-		IngestURL:    ingestURL,
-		VerifierURL:  verifierURL,
-		DashboardURL: dashboardURL,
+	cfg := localloop.LocalDevConfig{
+		HomeDir:       home,
+		IngestAddr:    ingestAddr,
+		VerifierAddr:  verifierAddr,
+		DashboardAddr: dashboardAddr,
+		OpenBrowser:   localloop.LocalDashboardAutoOpenEnabled(),
+		Stdout:        func(s string) { fmt.Println(s) },
 	}
 
-	ingestSrv := localloop.NewIngestServer(ingestAddr, db, nats)
-	flowBuilder := localloop.NewFlowBuilder(db, nats)
-
-	fmt.Println("data dir:", dataDir)
-	fmt.Println("migrating SQLite")
-	fmt.Println("generating local tenant: tnt_local")
-	fmt.Println("starting ingest    on", ingestAddr)
-	fmt.Println("starting verifier  on", verifierAddr)
-	fmt.Println("starting dashboard on", dashboardAddr)
-	fmt.Println("starting flow builder")
-	fmt.Println("NATS URL:", nats.URL())
-	fmt.Println()
-	fmt.Println("Ingest endpoint:", ingestURL+"/v1/events")
-	fmt.Println("Verifier API:   ", verifierURL+"/v1/verify/run")
-	fmt.Println("Bundle verify:  ", verifierURL+"/v1/verify/bundle")
-	fmt.Println("Dashboard:      ", dashboardURL+"/")
-	fmt.Println("NATS endpoint:  ", nats.URL())
-	fmt.Println("\nWhen you run code with INTENTPROOF_INGEST_URL=" + ingestURL + "/v1/events,")
-	fmt.Println("use the dashboard to inspect flows. Ctrl-C to stop.")
-	if localloop.LocalDashboardAutoOpenEnabled() {
-		fmt.Println("Opening dashboard in your default browser (set " + localloop.EnvLocalOpenBrowser + "=0 to skip).")
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	errCh := make(chan error, 4)
-
-	// Start ingest HTTP server in background.
-	go func() {
-		if err := ingestSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errCh <- fmt.Errorf("ingest server: %w", err)
-		}
-	}()
-
-	go func() {
-		if err := http.ListenAndServe(verifierAddr, localloop.LocalVerifierHandler()); err != nil {
-			errCh <- fmt.Errorf("verifier server: %w", err)
-		}
-	}()
-
-	go func() {
-		if err := http.ListenAndServe(dashboardAddr, localloop.LocalDashboardHandler(db, dashLinks)); err != nil {
-			errCh <- fmt.Errorf("dashboard server: %w", err)
-		}
-	}()
-
-	localloop.MaybeOpenLocalDashboard(dashboardURL)
-
-	// Start flow builder in background.
-	go func() {
-		if err := flowBuilder.Run(ctx); err != nil && err != context.Canceled {
-			errCh <- fmt.Errorf("flow builder: %w", err)
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		fmt.Println("\nShutting down...")
-		return nil
-	case err := <-errCh:
+	if err := localloop.RunLocalDevLoop(ctx, cfg); err != nil {
 		fmt.Println("\nShutting down after error...")
 		return err
 	}
+	fmt.Println("\nShutting down...")
+	return nil
 }

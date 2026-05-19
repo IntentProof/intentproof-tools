@@ -13,6 +13,9 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp"
 )
 
+// newPkgSignKMSSigner is overridden in tests to inject a fake KMS client.
+var newPkgSignKMSSigner = openpgpkms.NewKMSSigner
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -220,7 +223,7 @@ func entityFromOptions(opts commandOptions) (*openpgp.Entity, time.Time, error) 
 	if keyID == "" {
 		return nil, time.Time{}, fmt.Errorf("--kms-key-id or INTENTPROOF_PKG_SIGN_KMS_KEY_ID is required")
 	}
-	signer, err := openpgpkms.NewKMSSigner(context.Background(), keyID)
+	signer, err := newPkgSignKMSSigner(context.Background(), keyID)
 	if err != nil {
 		return nil, time.Time{}, err
 	}

@@ -13,6 +13,10 @@ import (
 // skip. The process CI environment variable (non-empty) also disables opens.
 const EnvLocalOpenBrowser = "INTENTPROOF_LOCAL_OPEN_BROWSER"
 
+// launchBrowser opens a URL in the system browser. Tests replace this hook so
+// `go test` never spawns a real browser tab.
+var launchBrowser = openDefaultBrowser
+
 // MaybeOpenLocalDashboard schedules opening the dashboard URL in the system
 // default browser. It is non-blocking and no-ops when disabled or on
 // unsupported configurations.
@@ -22,7 +26,7 @@ func MaybeOpenLocalDashboard(dashboardOrigin string) {
 	}
 	url := strings.TrimSuffix(strings.TrimSpace(dashboardOrigin), "/") + "/"
 	time.AfterFunc(400*time.Millisecond, func() {
-		_ = openDefaultBrowser(url)
+		_ = launchBrowser(url)
 	})
 }
 
@@ -37,7 +41,7 @@ func OpenLocalDashboardBrowser(dashboardOrigin string) (attempted bool, err erro
 		return false, nil
 	}
 	url := strings.TrimSuffix(strings.TrimSpace(dashboardOrigin), "/") + "/"
-	return true, openDefaultBrowser(url)
+	return true, launchBrowser(url)
 }
 
 func localOpenBrowserEnabled() bool {

@@ -13,8 +13,12 @@ import (
 
 // KMSPolicySigner uses AWS KMS asymmetric signing for platform-managed keys.
 type KMSPolicySigner struct {
-	client *kms.Client
+	client kmsPolicySignClient
 	keyID  string
+}
+
+type kmsPolicySignClient interface {
+	Sign(context.Context, *kms.SignInput, ...func(*kms.Options)) (*kms.SignOutput, error)
 }
 
 // NewKMSPolicySigner creates a KMS signer for the given key ID (ARN or alias).
@@ -26,8 +30,19 @@ func NewKMSPolicySigner(keyID string) (PolicySigner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load AWS config: %w", err)
 	}
+	return NewKMSPolicySignerFromClient(kms.NewFromConfig(cfg), keyID)
+}
+
+// NewKMSPolicySignerFromClient creates a KMS signer from an injected API client.
+func NewKMSPolicySignerFromClient(client kmsPolicySignClient, keyID string) (PolicySigner, error) {
+	if client == nil {
+		return nil, fmt.Errorf("KMS client is required")
+	}
+	if keyID == "" {
+		return nil, fmt.Errorf("KMS key ID is required")
+	}
 	return &KMSPolicySigner{
-		client: kms.NewFromConfig(cfg),
+		client: client,
 		keyID:  keyID,
 	}, nil
 }

@@ -37,8 +37,21 @@ jobs:
       - name: go build
         run: go build ./...
 
-      - name: go test
-        run: go test ./...
+      - name: Run tests with coverage
+        env:
+          INTENTPROOF_LOCAL_OPEN_BROWSER: "0"
+        run: |
+          mapfile -t PACKAGES < <(go list ./... | grep -v '/cmd/local-seed$')
+          go test -count=1 -coverprofile=coverage.out -covermode=atomic "${PACKAGES[@]}"
+
+      - name: Enforce coverage threshold
+        run: bash ./scripts/check-coverage.sh coverage.out 80
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage.out
+          path: coverage.out
 
       - name: Verify policy compiler against pinned spec schema
         run: INTENTPROOF_SPEC_DIR=./intentproof-spec ./scripts/check-spec-conformance.sh
