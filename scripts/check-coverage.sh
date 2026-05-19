@@ -14,7 +14,8 @@ if [[ ! -f "$PROFILE_PATH" ]]; then
 fi
 
 read -r COVERED TOTAL <<EOF
-$(awk 'NR>1 { stmts=$(NF-1); cnt=$NF; total+=stmts; if (cnt>0) covered+=stmts }
+$(awk 'BEGIN { covered=0; total=0 }
+     NR>1 { stmts=$(NF-1); cnt=$NF; total+=stmts; if (cnt>0) covered+=stmts }
      END { print covered, total }' "$PROFILE_PATH")
 EOF
 
