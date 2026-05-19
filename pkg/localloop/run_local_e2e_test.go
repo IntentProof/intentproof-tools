@@ -102,6 +102,43 @@ func TestRunLocalDevLoopIngestAndDashboard(t *testing.T) {
 	t.Fatal("dashboard never showed correlation")
 }
 
+func TestRunLocalDevLoopExitsOnServerError(t *testing.T) {
+	home := t.TempDir()
+	ingestPort := freeTCPPort(t)
+	verifierPort := freeTCPPort(t)
+	dashboardPort := freeTCPPort(t)
+
+	// Occupy the ingest port so ListenAndServe fails immediately.
+	occupied, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", ingestPort))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer occupied.Close()
+
+	ctx := context.Background()
+	cfg := LocalDevConfig{
+		HomeDir:       home,
+		IngestAddr:    fmt.Sprintf("127.0.0.1:%d", ingestPort),
+		VerifierAddr:  fmt.Sprintf("127.0.0.1:%d", verifierPort),
+		DashboardAddr: fmt.Sprintf("127.0.0.1:%d", dashboardPort),
+		OpenBrowser:   false,
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- RunLocalDevLoop(ctx, cfg)
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected error when ingest port is occupied")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunLocalDevLoop hung after server start failure")
+	}
+}
+
 func freeTCPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")

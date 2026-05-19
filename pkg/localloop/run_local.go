@@ -79,6 +79,8 @@ func RunLocalDevLoop(ctx context.Context, cfg LocalDevConfig) error {
 
 	ingestSrv := NewIngestServer(ingestAddr, db, nats)
 	flowBuilder := NewFlowBuilder(db, nats)
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
 
 	logf("data dir: " + dataDir)
 	logf("starting ingest on " + ingestAddr)
@@ -106,7 +108,7 @@ func RunLocalDevLoop(ctx context.Context, cfg LocalDevConfig) error {
 	flowDone := make(chan struct{})
 	go func() {
 		defer close(flowDone)
-		if err := flowBuilder.Run(ctx); err != nil && err != context.Canceled {
+		if err := flowBuilder.Run(runCtx); err != nil && err != context.Canceled {
 			errCh <- fmt.Errorf("flow builder: %w", err)
 		}
 	}()
@@ -120,6 +122,8 @@ func RunLocalDevLoop(ctx context.Context, cfg LocalDevConfig) error {
 	case <-ctx.Done():
 	case runErr = <-errCh:
 	}
+
+	cancelRun()
 
 	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelShutdown()
