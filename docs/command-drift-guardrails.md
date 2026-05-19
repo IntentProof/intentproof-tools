@@ -8,6 +8,11 @@ for Tier 2 commands lives in
 ## cmd/intentproof
 
 - Unknown top-level command returns exit code `1` and prints `Unknown command: <name>` to stderr.
+- `intentproof init` performs offline, read-only project detection and prints
+  `Detected`, `Recommended setup`, and `Next` sections.
+- `intentproof init --template stripe-refund` prints the preview wedge outline
+  and does not claim live Stripe end-to-end readiness before reconciliation
+  gates close.
 - Missing policy subcommand returns exit code `1` and prints `Usage: intentproof policy <subcommand>`.
 - `policy test` fixture output order is deterministic and alphabetical by fixture directory name.
 
