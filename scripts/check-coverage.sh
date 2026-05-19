@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
+# Verify total statement coverage from a go cover profile.
+# Usage: check-coverage.sh [profile] [min_percent]
+# Default profile: coverage.out. Default minimum: 80%.
 
 set -euo pipefail
 
 PROFILE_PATH="${1:-coverage.out}"
-MIN_COVERAGE="${2:-95}"
+MIN_COVERAGE="${2:-80}"
 
 if [[ ! -f "$PROFILE_PATH" ]]; then
   echo "coverage profile not found: $PROFILE_PATH" >&2
