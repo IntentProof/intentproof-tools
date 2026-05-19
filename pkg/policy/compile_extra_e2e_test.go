@@ -1,6 +1,9 @@
 package policy
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestCompileValueBoundAndClaimMatchRules(t *testing.T) {
 	raw := []byte(`
@@ -27,5 +30,29 @@ rules:
 	}
 	if len(result.Policy.Rules) != 2 {
 		t.Fatalf("rules=%d", len(result.Policy.Rules))
+	}
+}
+
+func TestCompileFileMissingPath(t *testing.T) {
+	_, err := CompileFile(filepath.Join(t.TempDir(), "missing.yaml"))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestCompileRejectsEmptyScope(t *testing.T) {
+	raw := []byte(`
+policy_id: tnt.test
+tenant_id: tnt
+policy_version: 1
+spec_version: 1.0.0
+rules:
+  - id: r1
+    type: required
+    action: demo.action
+    min: 1
+`)
+	if _, err := Compile(raw); err == nil {
+		t.Fatal("expected scope error")
 	}
 }
