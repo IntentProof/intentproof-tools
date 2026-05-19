@@ -109,7 +109,7 @@ func checkSDKConfig() []Check {
 
 	token := strings.TrimSpace(os.Getenv("INTENTPROOF_INGEST_TOKEN"))
 	if token == "" {
-		if source == "INTENTPROOF_USE_LOCAL_INGEST" || strings.Contains(ingestURL, "127.0.0.1") || strings.Contains(ingestURL, "localhost") {
+		if source == "INTENTPROOF_USE_LOCAL_INGEST" || isLocalIngestURL(ingestURL) {
 			out = append(out, Check{
 				Name:   "ingest auth",
 				Status: StatusOK,

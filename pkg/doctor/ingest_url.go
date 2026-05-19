@@ -12,6 +12,25 @@ func ingestURLsEquivalent(a, b string) bool {
 	return normalizeIngestEndpoint(a) == normalizeIngestEndpoint(b)
 }
 
+// isLocalIngestURL reports whether raw points at a loopback ingest host.
+func isLocalIngestURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host, _, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		host = u.Host
+	}
+	host = strings.ToLower(strings.Trim(host, "[]"))
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
 func normalizeIngestEndpoint(raw string) string {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Scheme == "" || u.Host == "" {
