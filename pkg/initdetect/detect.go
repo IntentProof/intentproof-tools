@@ -205,16 +205,40 @@ func nodeInstallCommand(pm string) string {
 }
 
 func recommendPython(p Project) []string {
-	tool := "pip"
+	pm := "pip"
 	for _, item := range p.Detected {
 		if item.Label == "Package manager" {
-			tool = strings.ToLower(strings.Fields(item.Detail)[0])
+			pm = pythonPackageManagerName(strings.Fields(item.Detail)[0])
 		}
 	}
 	return []string{
-		fmt.Sprintf("Install the SDK: %s install intentproof", tool),
+		"Install the SDK: " + pythonInstallCommand(pm),
 		"Wrap your refund handler with intentproof.wrap(intent=..., action='payments.refund.execute', fn=...)",
 		"Export INTENTPROOF_USE_LOCAL_INGEST=1, run intentproof local, then invoke the wrapped function once",
+	}
+}
+
+func pythonPackageManagerName(detail string) string {
+	pm := strings.ToLower(strings.TrimSpace(detail))
+	if i := strings.Index(pm, " "); i > 0 {
+		pm = pm[:i]
+	}
+	if i := strings.Index(pm, "("); i > 0 {
+		pm = strings.TrimSpace(pm[:i])
+	}
+	return pm
+}
+
+func pythonInstallCommand(pm string) string {
+	switch pm {
+	case "poetry":
+		return "poetry add intentproof"
+	case "uv":
+		return "uv add intentproof"
+	case "pipenv":
+		return "pipenv install intentproof"
+	default:
+		return "pip install intentproof"
 	}
 }
 

@@ -53,6 +53,51 @@ func TestDetectUnknownProjectExplainsWhatWasChecked(t *testing.T) {
 	}
 }
 
+func TestRecommendPythonInstallCommands(t *testing.T) {
+	tests := []struct {
+		pm   string
+		want string
+	}{
+		{"pip", "pip install intentproof"},
+		{"pipenv", "pipenv install intentproof"},
+		{"poetry", "poetry add intentproof"},
+		{"uv", "uv add intentproof"},
+		{"uv (uv.lock)", "uv add intentproof"},
+	}
+	for _, tc := range tests {
+		got := pythonInstallCommand(pythonPackageManagerName(tc.pm))
+		if got != tc.want {
+			t.Fatalf("pm %q: got %q want %q", tc.pm, got, tc.want)
+		}
+	}
+}
+
+func TestDetectPythonPoetryAndUV(t *testing.T) {
+	poetryRoot := t.TempDir()
+	writeFile(t, filepath.Join(poetryRoot, "pyproject.toml"), "[project]\nname = \"demo\"\n")
+	writeFile(t, filepath.Join(poetryRoot, "poetry.lock"), "")
+
+	uvRoot := t.TempDir()
+	writeFile(t, filepath.Join(uvRoot, "pyproject.toml"), "[project]\nname = \"demo\"\n")
+	writeFile(t, filepath.Join(uvRoot, "uv.lock"), "")
+
+	poetryProject, err := Detect(poetryRoot)
+	if err != nil {
+		t.Fatalf("Detect poetry: %v", err)
+	}
+	if !strings.Contains(FormatReport(poetryProject), "poetry add intentproof") {
+		t.Fatalf("poetry report:\n%s", FormatReport(poetryProject))
+	}
+
+	uvProject, err := Detect(uvRoot)
+	if err != nil {
+		t.Fatalf("Detect uv: %v", err)
+	}
+	if !strings.Contains(FormatReport(uvProject), "uv add intentproof") {
+		t.Fatalf("uv report:\n%s", FormatReport(uvProject))
+	}
+}
+
 func TestStripeRefundTemplateIsPreviewOutline(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "package.json"), `{"dependencies":{"stripe":"^15.0.0"}}`)
