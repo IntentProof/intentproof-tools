@@ -1,0 +1,12 @@
+Origin: IntentProof
+Label: IntentProof
+Suite: stable
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: IntentProof Debian package repository
+SHA256:
+ dbeedb26e714509926cb5f5d5a247e3c76f37625108a91a0e71bcdba9109c8ca              947 main/binary-amd64/Packages
+ 9826f01a2dc0d617bfbc1cd64acc8172ebc38b1b825f0961d1a35ff3d92397e6              429 main/binary-amd64/Packages.gz
+ cd26a05200b32cb79f138408aafb80b7166b859f015009af42ecc26c7203463a              947 main/binary-arm64/Packages
+ 865f8f68661d44c50ea4064078cb2da1623aa4f480a8dd6c25b23cd4a46a8eaa              430 main/binary-arm64/Packages.gz

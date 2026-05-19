@@ -41,8 +41,13 @@ if command -v gpg >/dev/null 2>&1; then
   chmod 700 "$verify_home"
   gpg --homedir "$verify_home" --batch --no-tty --import "$public_key_path"
   gpg --homedir "$verify_home" --batch --no-tty --verify "$release_sig_path" "$release_path"
-  gpg --homedir "$verify_home" --batch --no-tty --verify "$inrelease_path"
   rm -rf "$verify_home"
 fi
+
+"$pkg_sign" verify-apt-metadata \
+  --public-key "$public_key_path" \
+  --release "$release_path" \
+  --release-sig "$release_sig_path" \
+  --inrelease "$inrelease_path"
 
 printf 'PASS: signed apt metadata in %s\n' "$repo_root"
