@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,6 +96,28 @@ func TestIngestWritesFlowsEndToEnd(t *testing.T) {
 	}
 	if n < 2 {
 		t.Fatalf("expected >=2 flow rows, got %d", n)
+	}
+
+	flowJSON, err := BuildVerifierFlowJSON(ctx, db, "tnt_e2e", "corr_e2e")
+	if err != nil {
+		t.Fatalf("BuildVerifierFlowJSON: %v", err)
+	}
+	if len(flowJSON) == 0 {
+		t.Fatal("expected verifier flow json")
+	}
+	jsonl, err := LoadEventsJSONL(ctx, db, "tnt_e2e", "corr_e2e")
+	if err != nil {
+		t.Fatalf("LoadEventsJSONL: %v", err)
+	}
+	if len(jsonl) == 0 {
+		t.Fatal("expected jsonl events")
+	}
+	digest, err := EventChainDigest(ev2)
+	if err != nil {
+		t.Fatalf("EventChainDigest: %v", err)
+	}
+	if !strings.HasPrefix(FormatChainHash(digest), "sha256:") {
+		t.Fatalf("unexpected chain hash: %s", FormatChainHash(digest))
 	}
 }
 
