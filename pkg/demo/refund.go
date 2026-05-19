@@ -183,10 +183,10 @@ func RunRefund(ctx context.Context, opt Options) error {
 
 	waitCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if err := waitForCorrelationFlow(waitCtx, db, corrRefundOK); err != nil {
+	if err := waitForCorrelationFlow(waitCtx, db, corrRefundOK, 3); err != nil {
 		return err
 	}
-	if err := waitForCorrelationFlow(waitCtx, db, corrRefundMissingNotify); err != nil {
+	if err := waitForCorrelationFlow(waitCtx, db, corrRefundMissingNotify, 2); err != nil {
 		return err
 	}
 
@@ -412,15 +412,15 @@ func demoIntentForAction(action string) string {
 	}
 }
 
-func waitForCorrelationFlow(ctx context.Context, db *sql.DB, correlationID string) error {
+func waitForCorrelationFlow(ctx context.Context, db *sql.DB, correlationID string, wantEvents int) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for flow %s: %w", correlationID, ctx.Err())
+			return fmt.Errorf("timeout waiting for flow %s with %d events: %w", correlationID, wantEvents, ctx.Err())
 		default:
 		}
-		_, err := localloop.GetFlowByCorrelationID(ctx, db, localloop.LocalTenantID, correlationID)
-		if err == nil {
+		snap, err := localloop.GetFlowByCorrelationID(ctx, db, localloop.LocalTenantID, correlationID)
+		if err == nil && len(snap.Events) >= wantEvents {
 			return nil
 		}
 		time.Sleep(50 * time.Millisecond)
