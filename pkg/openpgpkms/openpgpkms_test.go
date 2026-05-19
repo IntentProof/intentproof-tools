@@ -43,6 +43,10 @@ func TestArmoredPublicKeyImportsWithRPMWhenAvailable(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	keyPath := filepath.Join(dir, "intentproof.gpg")
+	rpmDBPath := filepath.Join(dir, "rpmdb")
+	if err := os.Mkdir(rpmDBPath, 0o700); err != nil {
+		t.Fatalf("create rpm database dir: %v", err)
+	}
 	var publicKey bytes.Buffer
 	if err := ArmoredPublicKey(&publicKey, entity); err != nil {
 		t.Fatalf("export public key: %v", err)
@@ -50,10 +54,7 @@ func TestArmoredPublicKeyImportsWithRPMWhenAvailable(t *testing.T) {
 	if err := os.WriteFile(keyPath, publicKey.Bytes(), 0o644); err != nil {
 		t.Fatalf("write key: %v", err)
 	}
-	cmd := exec.Command("rpm", "--import", keyPath)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("rpm --import: %v\n%s", err, out)
-	}
+	runRPM(t, rpmDBPath, "--import", keyPath)
 }
 
 func TestArmoredClearSignVerifiesWithOpenPGP(t *testing.T) {
@@ -285,6 +286,15 @@ func runGPG(t *testing.T, home string, args ...string) {
 	cmd := exec.Command("gpg", append(base, args...)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("gpg %v: %v\n%s", args, err, out)
+	}
+}
+
+func runRPM(t *testing.T, dbpath string, args ...string) {
+	t.Helper()
+	base := []string{"--dbpath", dbpath}
+	cmd := exec.Command("rpm", append(base, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("rpm %v: %v\n%s", args, err, out)
 	}
 }
 
