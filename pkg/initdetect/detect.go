@@ -136,6 +136,7 @@ func FormatReport(p Project) string {
 	}
 	b.WriteString("\nNext:\n")
 	b.WriteString("  intentproof demo refund\n")
+	b.WriteString("  intentproof init --agent   (markdown guide for coding agents)\n")
 	if p.Primary == "node" || hasStripe(p) {
 		b.WriteString("  intentproof init --template stripe-refund   (guided wedge outline)\n")
 	}

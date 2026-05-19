@@ -76,6 +76,73 @@ func TestInitCommandTemplateStripeRefund(t *testing.T) {
 	}
 }
 
+func TestInitCommandAgentMarkdown(t *testing.T) {
+	root := t.TempDir()
+	writeInitTestFile(t, filepath.Join(root, "package.json"), `{
+  "dependencies": {"stripe": "^15.0.0"},
+  "packageManager": "npm@10.0.0"
+}`)
+
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(oldwd); err != nil {
+			t.Fatalf("restore wd: %v", err)
+		}
+	}()
+
+	var stdout strings.Builder
+	var stderr strings.Builder
+	code := run([]string{"init", "--agent"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"# IntentProof implementation guide",
+		"## Constraints",
+		"npm install @intentproof/sdk",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestInitCommandAgentViaEnv(t *testing.T) {
+	t.Setenv("INTENTPROOF_AGENT", "1")
+	root := t.TempDir()
+	writeInitTestFile(t, filepath.Join(root, "package.json"), `{"dependencies":{"stripe":"^15.0.0"}}`)
+
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(oldwd); err != nil {
+			t.Fatalf("restore wd: %v", err)
+		}
+	}()
+
+	var stdout strings.Builder
+	var stderr strings.Builder
+	code := run([]string{"init"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.HasPrefix(stdout.String(), "# IntentProof implementation guide") {
+		t.Fatalf("expected agent markdown, got:\n%s", stdout.String())
+	}
+}
+
 func TestInitCommandRejectsUnknownTemplate(t *testing.T) {
 	var stdout strings.Builder
 	var stderr strings.Builder

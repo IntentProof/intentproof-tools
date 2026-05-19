@@ -13,6 +13,8 @@ for Tier 2 commands lives in
 - `intentproof init --template stripe-refund` prints the preview wedge outline
   and does not claim live Stripe end-to-end readiness before reconciliation
   gates close.
+- `intentproof init --agent` (or `INTENTPROOF_AGENT=1`) prints markdown for
+  coding agents; `--template stripe-refund --agent` includes the Path 3 outline.
 - Missing policy subcommand returns exit code `1` and prints `Usage: intentproof policy <subcommand>`.
 - `policy test` fixture output order is deterministic and alphabetical by fixture directory name.
 
