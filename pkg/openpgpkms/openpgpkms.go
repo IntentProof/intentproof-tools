@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/armor"
-	"golang.org/x/crypto/openpgp/clearsign"
-	"golang.org/x/crypto/openpgp/packet"
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/clearsign"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 )
 
 const (
@@ -81,6 +81,7 @@ func NewEntity(signer crypto.Signer, opts EntityOptions) (*openpgp.Entity, error
 		Name:          uid.Id,
 		UserId:        uid,
 		SelfSignature: selfSig,
+		Signatures:    []*packet.Signature{selfSig},
 	}
 	return entity, nil
 }

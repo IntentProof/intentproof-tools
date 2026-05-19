@@ -12,9 +12,50 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/clearsign"
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/clearsign"
 )
+
+func TestSelfSignatureIncludesIssuerFingerprint(t *testing.T) {
+	entity := testEntity(t)
+	identity := entity.PrimaryIdentity()
+	if identity == nil || identity.SelfSignature == nil {
+		t.Fatal("expected primary identity self-signature")
+	}
+	got := identity.SelfSignature.IssuerFingerprint
+	want := entity.PrimaryKey.Fingerprint[:]
+	if len(got) == 0 {
+		t.Fatal("expected issuer fingerprint subpacket on self-signature")
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("issuer fingerprint mismatch:\n got %X\nwant %X", got, want)
+	}
+}
+
+func TestArmoredPublicKeyImportsWithRPMWhenAvailable(t *testing.T) {
+	if _, err := exec.LookPath("rpm"); err != nil {
+		t.Skip("rpm not installed")
+	}
+	entity := testEntity(t)
+	dir, err := os.MkdirTemp("/tmp", "iprpm-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	keyPath := filepath.Join(dir, "intentproof.gpg")
+	rpmDBPath := filepath.Join(dir, "rpmdb")
+	if err := os.Mkdir(rpmDBPath, 0o700); err != nil {
+		t.Fatalf("create rpm database dir: %v", err)
+	}
+	var publicKey bytes.Buffer
+	if err := ArmoredPublicKey(&publicKey, entity); err != nil {
+		t.Fatalf("export public key: %v", err)
+	}
+	if err := os.WriteFile(keyPath, publicKey.Bytes(), 0o644); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	runRPM(t, rpmDBPath, "--import", keyPath)
+}
 
 func TestArmoredClearSignVerifiesWithOpenPGP(t *testing.T) {
 	entity := testEntity(t)
@@ -40,7 +81,7 @@ func TestArmoredClearSignVerifiesWithOpenPGP(t *testing.T) {
 	if !bytes.Equal(block.Plaintext, message) {
 		t.Fatalf("clearsigned plaintext mismatch:\n got %q\nwant %q", block.Plaintext, message)
 	}
-	if _, err := openpgp.CheckDetachedSignature(keyring, bytes.NewReader(block.Bytes), block.ArmoredSignature.Body); err != nil {
+	if _, err := openpgp.CheckDetachedSignature(keyring, bytes.NewReader(block.Bytes), block.ArmoredSignature.Body, nil); err != nil {
 		t.Fatalf("verify clearsigned message: %v", err)
 	}
 }
@@ -111,7 +152,7 @@ func TestArmoredDetachSignVerifiesWithOpenPGP(t *testing.T) {
 	if err := ArmoredDetachSign(&sig, entity, bytes.NewReader(message), fixedTime()); err != nil {
 		t.Fatalf("detach sign: %v", err)
 	}
-	if _, err := openpgp.CheckArmoredDetachedSignature(keyring, bytes.NewReader(message), bytes.NewReader(sig.Bytes())); err != nil {
+	if _, err := openpgp.CheckArmoredDetachedSignature(keyring, bytes.NewReader(message), bytes.NewReader(sig.Bytes()), nil); err != nil {
 		t.Fatalf("verify detached signature: %v", err)
 	}
 }
@@ -245,6 +286,15 @@ func runGPG(t *testing.T, home string, args ...string) {
 	cmd := exec.Command("gpg", append(base, args...)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("gpg %v: %v\n%s", args, err, out)
+	}
+}
+
+func runRPM(t *testing.T, dbpath string, args ...string) {
+	t.Helper()
+	base := []string{"--dbpath", dbpath}
+	cmd := exec.Command("rpm", append(base, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("rpm %v: %v\n%s", args, err, out)
 	}
 }
 

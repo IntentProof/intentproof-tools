@@ -3,6 +3,7 @@ module github.com/intentproof/intentproof-tools
 go 1.25.0
 
 require (
+	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
 	github.com/aws/aws-sdk-go-v2/service/kms v1.51.1
 	github.com/klauspost/compress v1.18.5
@@ -29,6 +30,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.21 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
 	github.com/aws/smithy-go v1.25.1 // indirect
+	github.com/cloudflare/circl v1.6.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
