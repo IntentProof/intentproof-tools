@@ -28,6 +28,9 @@ const maxVerifyBundleBodyBytes = 64 << 20
 // still run when the bundle is signed or unsigned per bundle.Verify rules).
 const EnvLocalBundleVerifyPubkey = "INTENTPROOF_LOCAL_BUNDLE_VERIFY_PUBKEY"
 
+// localServicesJSONMarshal is overridden in tests for marshal failure paths.
+var localServicesJSONMarshal = json.Marshal
+
 // LocalVerifierHandler serves a minimal HTTP verifier API used by
 // `intentproof local` on the verifier port (default :9788).
 func LocalVerifierHandler() http.Handler {
@@ -80,7 +83,7 @@ func handleVerifyRun(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	out, err := json.Marshal(vr)
+	out, err := localServicesJSONMarshal(vr)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -147,7 +150,7 @@ func handleVerifyBundle(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	out, err := json.Marshal(vr)
+	out, err := localServicesJSONMarshal(vr)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

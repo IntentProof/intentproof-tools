@@ -23,11 +23,18 @@ func TestLocalOpenBrowserEnabled(t *testing.T) {
 			})
 		}
 	})
-	t.Run("default on without ci", func(t *testing.T) {
+	t.Run("explicit on without ci", func(t *testing.T) {
+		t.Setenv("CI", "")
+		t.Setenv(EnvLocalOpenBrowser, "1")
+		if !localOpenBrowserEnabled() || !LocalDashboardAutoOpenEnabled() {
+			t.Fatal("expected enabled when explicitly enabled")
+		}
+	})
+	t.Run("default off under go test", func(t *testing.T) {
 		t.Setenv("CI", "")
 		t.Setenv(EnvLocalOpenBrowser, "")
-		if !localOpenBrowserEnabled() || !LocalDashboardAutoOpenEnabled() {
-			t.Fatal("expected enabled")
+		if localOpenBrowserEnabled() {
+			t.Fatal("expected disabled by default under go test")
 		}
 	})
 }

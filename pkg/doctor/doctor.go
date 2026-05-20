@@ -58,7 +58,7 @@ func Run(ctx context.Context, opts Options) Report {
 	home := strings.TrimSpace(opts.HomeDir)
 	if home == "" {
 		var err error
-		home, err = os.UserHomeDir()
+		home, err = doctorUserHomeDir()
 		if err != nil {
 			return Report{Checks: []Check{{
 				Name:   "environment",
@@ -70,7 +70,7 @@ func Run(ctx context.Context, opts Options) Report {
 	cwd := strings.TrimSpace(opts.Cwd)
 	if cwd == "" {
 		var err error
-		cwd, err = os.Getwd()
+		cwd, err = doctorGetwd()
 		if err != nil {
 			return Report{Checks: []Check{{
 				Name:   "environment",

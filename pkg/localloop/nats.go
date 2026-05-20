@@ -15,6 +15,21 @@ import (
 
 const defaultEventsStream = "INTENTPROOF_EVENTS"
 
+// natsNewServer, natsServerReady, natsConnectClient, and natsOpenJetStream are
+// overridden in tests to exercise StartEmbeddedNATS error paths.
+var (
+	natsNewServer     = server.NewServer
+	natsServerReady   = func(ns *server.Server, timeout time.Duration) bool { return ns.ReadyForConnections(timeout) }
+	natsConnectClient = nats.Connect
+	natsOpenJetStream = func(c *nats.Conn) (nats.JetStreamContext, error) { return c.JetStream() }
+	natsStreamInfo    = func(js nats.JetStreamContext, name string) (*nats.StreamInfo, error) {
+		return js.StreamInfo(name)
+	}
+	natsAddStream = func(js nats.JetStreamContext, cfg *nats.StreamConfig) (*nats.StreamInfo, error) {
+		return js.AddStream(cfg)
+	}
+)
+
 // NATSWrapper manages an embedded NATS server and client connections.
 type NATSWrapper struct {
 	Server *server.Server
@@ -38,23 +53,23 @@ func StartEmbeddedNATS(jetStreamRoot string) (*NATSWrapper, error) {
 		NoLog:     true,
 		NoSigs:    true,
 	}
-	ns, err := server.NewServer(opts)
+	ns, err := natsNewServer(opts)
 	if err != nil {
 		return nil, fmt.Errorf("create nats server: %w", err)
 	}
 	ns.Start()
-	if !ns.ReadyForConnections(10 * time.Second) {
+	if !natsServerReady(ns, 10*time.Second) {
 		ns.Shutdown()
 		return nil, fmt.Errorf("nats server did not start in time")
 	}
 
-	client, err := nats.Connect(ns.ClientURL())
+	client, err := natsConnectClient(ns.ClientURL())
 	if err != nil {
 		ns.Shutdown()
 		return nil, fmt.Errorf("connect nats client: %w", err)
 	}
 
-	js, err := client.JetStream()
+	js, err := natsOpenJetStream(client)
 	if err != nil {
 		_ = client.Drain()
 		ns.Shutdown()
@@ -70,14 +85,14 @@ func StartEmbeddedNATS(jetStreamRoot string) (*NATSWrapper, error) {
 }
 
 func ensureEventsStream(js nats.JetStreamContext, streamName string) error {
-	_, err := js.StreamInfo(streamName)
+	_, err := natsStreamInfo(js, streamName)
 	if err == nil {
 		return nil
 	}
 	if !errors.Is(err, nats.ErrStreamNotFound) {
 		return fmt.Errorf("stream info: %w", err)
 	}
-	_, err = js.AddStream(&nats.StreamConfig{
+	_, err = natsAddStream(js, &nats.StreamConfig{
 		Name:      streamName,
 		Subjects:  []string{"events.committed.*"},
 		Retention: nats.LimitsPolicy,

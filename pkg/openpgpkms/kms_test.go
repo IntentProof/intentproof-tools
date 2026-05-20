@@ -152,6 +152,7 @@ type fakeKMSClient struct {
 	publicDER     []byte
 	signAlgorithm types.SigningAlgorithmSpec
 	messageType   types.MessageType
+	signErr       error
 }
 
 func (c *fakeKMSClient) GetPublicKey(context.Context, *kms.GetPublicKeyInput, ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
@@ -164,6 +165,9 @@ func (c *fakeKMSClient) GetPublicKey(context.Context, *kms.GetPublicKeyInput, ..
 }
 
 func (c *fakeKMSClient) Sign(_ context.Context, in *kms.SignInput, _ ...func(*kms.Options)) (*kms.SignOutput, error) {
+	if c.signErr != nil {
+		return nil, c.signErr
+	}
 	if c.priv == nil {
 		return nil, errors.New("missing private key")
 	}
