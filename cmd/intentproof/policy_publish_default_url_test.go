@@ -8,7 +8,28 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func waitForDefaultPolicyAPI(t *testing.T, path string) {
+	t.Helper()
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	url := "http://127.0.0.1:8090" + path
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := client.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("default policy API not ready on :8090")
+}
 
 func TestRunPolicyPublishUsesDefaultLocalhostAPI(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:8090")
@@ -26,6 +47,7 @@ func TestRunPolicyPublishUsesDefaultLocalhostAPI(t *testing.T) {
 	})}
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { _ = srv.Close() })
+	waitForDefaultPolicyAPI(t, "/v1/policies")
 
 	dir := t.TempDir()
 	policyPath := filepath.Join(dir, "policy.yaml")
@@ -72,6 +94,7 @@ func TestRunPolicyActivateUsesDefaultLocalhostAPI(t *testing.T) {
 	})}
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { _ = srv.Close() })
+	waitForDefaultPolicyAPI(t, "/v1/policy-bindings")
 
 	t.Setenv("INTENTPROOF_QUERY_API_URL", "")
 	var stdout, stderr bytes.Buffer

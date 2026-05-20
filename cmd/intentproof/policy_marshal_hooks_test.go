@@ -125,6 +125,46 @@ func TestRunPolicyActivateMarshalPayloadFailure(t *testing.T) {
 	}
 }
 
+func TestRunPolicyPublishMarshalRequestFailure(t *testing.T) {
+	calls := 0
+	orig := policyCmdJSONMarshal
+	policyCmdJSONMarshal = func(v any) ([]byte, error) {
+		calls++
+		if calls >= 2 {
+			return nil, errors.New("marshal request fail")
+		}
+		return orig(v)
+	}
+	t.Cleanup(func() { policyCmdJSONMarshal = orig })
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "policy.yaml")
+	if err := os.WriteFile(path, []byte(`policy_id: tnt_pub2.demo
+tenant_id: tnt_pub2
+policy_version: 1
+spec_version: 1.0.0
+scope:
+  match_action: demo.action
+rules:
+  - id: r1
+    type: required
+    action: demo.action
+    min: 1
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("INTENTPROOF_KMS_KEY_ID", "")
+	t.Setenv("INTENTPROOF_POLICY_SIGNING_KEY_B64", "")
+
+	var stdout, stderr bytes.Buffer
+	if code := runPolicyPublish([]string{path}, &stdout, &stderr); code == 0 {
+		t.Fatal("expected failure")
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("marshal request")) {
+		t.Fatalf("stderr=%q", stderr.String())
+	}
+}
+
 func TestRunPolicyPublishMarshalBodyFailure(t *testing.T) {
 	orig := policyCmdJSONMarshal
 	policyCmdJSONMarshal = func(any) ([]byte, error) {

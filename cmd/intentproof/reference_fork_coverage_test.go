@@ -10,6 +10,7 @@ import (
 
 func TestForkReferencePackCopyDirFailure(t *testing.T) {
 	root := writeSampleReferencePack(t)
+	t.Setenv("INTENTPROOF_REFERENCE_POLICIES_DIR", root)
 	pack, err := findReferencePack("reference.payments.refund-basic.v1")
 	if err != nil {
 		t.Fatal(err)

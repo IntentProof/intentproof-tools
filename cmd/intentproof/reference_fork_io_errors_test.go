@@ -12,11 +12,11 @@ import (
 
 func TestForkReferencePackMkdirAllError(t *testing.T) {
 	root := writeSampleReferencePack(t)
+	t.Setenv("INTENTPROOF_REFERENCE_POLICIES_DIR", root)
 	pack, err := findReferencePack("reference.payments.refund-basic.v1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("INTENTPROOF_REFERENCE_POLICIES_DIR", root)
 	// Parent path is a file, so MkdirAll for dest parent fails.
 	blocker := filepath.Join(t.TempDir(), "blocker")
 	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {

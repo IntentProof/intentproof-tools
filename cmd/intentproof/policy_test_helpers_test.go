@@ -4,7 +4,26 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/intentproof/intentproof-tools/pkg/policy"
 )
+
+func policyCompileMinimal(t *testing.T) (*policy.CompileResult, error) {
+	t.Helper()
+	return policy.Compile([]byte(`
+policy_id: tnt_min.demo
+tenant_id: tnt_min
+policy_version: 1
+spec_version: 1.0.0
+scope:
+  match_action: demo.action
+rules:
+  - id: r1
+    type: required
+    action: demo.action
+    min: 1
+`))
+}
 
 func TestJSONEqualIgnoreTimestampsNonMap(t *testing.T) {
 	if !jsonEqualIgnoreTimestamps(1, 1) {
@@ -68,14 +87,14 @@ func TestListFixtureDirsRejectsEmpty(t *testing.T) {
 func TestRunOneFixtureGenerateWhenMissing(t *testing.T) {
 	dir := t.TempDir()
 	flow := []byte(`{"flow_id":"f1","tenant_id":"tnt","flow_merkle_root":"sha256:0","events":[]}`)
-	policy := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[]}`)
+	policyJSON := []byte(`{"policy_id":"p1","tenant_id":"tnt","policy_version":1,"rules":[]}`)
 	if err := os.WriteFile(filepath.Join(dir, "flow.json"), flow, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "attestations.jsonl"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ok, generated, err := runOneFixture(dir, policy)
+	ok, generated, err := runOneFixture(dir, policyJSON)
 	if err != nil {
 		t.Fatal(err)
 	}

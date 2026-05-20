@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/intentproof/intentproof-tools/pkg/policy"
 )
 
 func TestRunOneFixtureVerifyPolicyError(t *testing.T) {
@@ -42,7 +40,7 @@ func TestMaybeSignPolicySignFailure(t *testing.T) {
 	t.Setenv("INTENTPROOF_KMS_KEY_ID", "")
 	seed := make([]byte, ed25519.SeedSize)
 	t.Setenv("INTENTPROOF_POLICY_SIGNING_KEY_B64", base64.StdEncoding.EncodeToString(seed))
-	compiled, err := policyCompileMinimalForSign(t)
+	compiled, err := policyCompileMinimal(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,21 +66,4 @@ func TestRunPolicyActivateNetworkError(t *testing.T) {
 	if code := run([]string{"policy", "activate", "tnt_x.demo", "1", "--scope", "global"}, &stdout, &stderr); code == 0 {
 		t.Fatal("expected activate failure")
 	}
-}
-
-func policyCompileMinimalForSign(t *testing.T) (*policy.CompileResult, error) {
-	t.Helper()
-	return policy.Compile([]byte(`
-policy_id: tnt_min.demo
-tenant_id: tnt_min
-policy_version: 1
-spec_version: 1.0.0
-scope:
-  match_action: demo.action
-rules:
-  - id: r1
-    type: required
-    action: demo.action
-    min: 1
-`))
 }

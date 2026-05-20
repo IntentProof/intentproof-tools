@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/intentproof/intentproof-tools/pkg/policy"
 )
 
 func TestRunOneFixtureReadFlowError(t *testing.T) {
@@ -53,21 +51,4 @@ func TestMaybeSignPolicyInitSignerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected init signer error")
 	}
-}
-
-func policyCompileMinimal(t *testing.T) (*policy.CompileResult, error) {
-	t.Helper()
-	return policy.Compile([]byte(`
-policy_id: tnt_min.demo
-tenant_id: tnt_min
-policy_version: 1
-spec_version: 1.0.0
-scope:
-  match_action: demo.action
-rules:
-  - id: r1
-    type: required
-    action: demo.action
-    min: 1
-`))
 }
