@@ -91,7 +91,7 @@ func TestIsEd25519HexSignatureRejectsBadLengthAndChars(t *testing.T) {
 	if isEd25519HexSignature("abc") {
 		t.Fatal("expected false for short value")
 	}
-	if isEd25519HexSignature(hex.EncodeToString(make([]byte, ed25519.SignatureSize))+"g") {
+	if isEd25519HexSignature(hex.EncodeToString(make([]byte, ed25519.SignatureSize)) + "g") {
 		t.Fatal("expected false for invalid hex char")
 	}
 }
