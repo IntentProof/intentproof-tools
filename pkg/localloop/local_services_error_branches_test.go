@@ -55,7 +55,6 @@ func TestHandleVerifyBundleWrongKeyLength(t *testing.T) {
 	}
 }
 
-
 func TestIngestHandleV1EventsInternalStoreError(t *testing.T) {
 	dir := t.TempDir()
 	db, err := OpenDB(filepath.Join(dir, "internal.db"))

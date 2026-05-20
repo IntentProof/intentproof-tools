@@ -62,7 +62,7 @@ func TestUpsertFlowCommitFailure(t *testing.T) {
 	now := time.Now().UTC()
 	err = UpsertFlow(context.Background(), db, FlowSnapshot{
 		Schema: "intentproof.flow.v1", FlowID: "f_commit", TenantID: "tnt", CorrelationID: "c",
-		Window: SnapshotWindow{OpenedAt: now, ClosedAt: now, ClosureReason: "event_committed"},
+		Window:      SnapshotWindow{OpenedAt: now, ClosedAt: now, ClosureReason: "event_committed"},
 		SnapshotURI: "local://snapshot/f_commit",
 	})
 	if err == nil || !strings.Contains(err.Error(), "commit fail") {
