@@ -171,8 +171,8 @@ func TestBuildVerifierFlowJSONWithEvents(t *testing.T) {
 	now := time.Date(2026, 5, 16, 0, 0, 0, 0, time.UTC)
 	snap := FlowSnapshot{
 		Schema: "intentproof.flow.v1", FlowID: "flow_bv", TenantID: "tnt_bv",
-		CorrelationID: "corr_bv",
-		Window: SnapshotWindow{OpenedAt: now, ClosedAt: now.Add(time.Second), ClosureReason: "event_committed"},
+		CorrelationID:       "corr_bv",
+		Window:              SnapshotWindow{OpenedAt: now, ClosedAt: now.Add(time.Second), ClosureReason: "event_committed"},
 		InstrumentationMode: "operational",
 		FlowMerkleRoot:      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		SnapshotURI:         "local://snapshot/flow_bv",

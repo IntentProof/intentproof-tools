@@ -32,14 +32,14 @@ func TestHandleVerifyBundleHappyPath(t *testing.T) {
 	h := LocalVerifierHandler()
 
 	opts := bundle.CreateOptions{
-		BundleID:   "b1",
-		FlowID:     "f1",
-		TenantID:   "tnt",
-		FlowJSON:   []byte(`{"flow_id":"f1","tenant_id":"tnt","events":[]}`),
+		BundleID:    "b1",
+		FlowID:      "f1",
+		TenantID:    "tnt",
+		FlowJSON:    []byte(`{"flow_id":"f1","tenant_id":"tnt","events":[]}`),
 		EventsJSONL: []byte(`{"event_id":"e1","action":"pay","status":"ok"}` + "\n"),
-		PolicyJSON: []byte(`{"policy_id":"p1","rules":[]}`),
-		RunJSON:    []byte(`{"run_id":"r1","flow_id":"f1","status":"pass","findings":[]}`),
-		PublicKeys: map[string][]byte{},
+		PolicyJSON:  []byte(`{"policy_id":"p1","rules":[]}`),
+		RunJSON:     []byte(`{"run_id":"r1","flow_id":"f1","status":"pass","findings":[]}`),
+		PublicKeys:  map[string][]byte{},
 	}
 	var buf bytes.Buffer
 	if err := bundle.Create(&buf, opts); err != nil {

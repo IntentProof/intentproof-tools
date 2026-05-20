@@ -30,7 +30,7 @@ func TestUpsertFlowInsertFlowsExecFailure(t *testing.T) {
 	now := time.Now().UTC()
 	err = UpsertFlow(context.Background(), db, FlowSnapshot{
 		Schema: "intentproof.flow.v1", FlowID: "f", TenantID: "tnt", CorrelationID: "c",
-		Window: SnapshotWindow{OpenedAt: now, ClosedAt: now, ClosureReason: "event_committed"},
+		Window:      SnapshotWindow{OpenedAt: now, ClosedAt: now, ClosureReason: "event_committed"},
 		SnapshotURI: "local://snapshot/f",
 	})
 	if err == nil || !strings.Contains(err.Error(), "upsert flow") {
@@ -58,7 +58,7 @@ func TestUpsertFlowInsertSnapshotExecFailure(t *testing.T) {
 	now := time.Now().UTC()
 	err = UpsertFlow(context.Background(), db, FlowSnapshot{
 		Schema: "intentproof.flow.v1", FlowID: "f2", TenantID: "tnt", CorrelationID: "c2",
-		Window: SnapshotWindow{OpenedAt: now, ClosedAt: now, ClosureReason: "event_committed"},
+		Window:      SnapshotWindow{OpenedAt: now, ClosedAt: now, ClosureReason: "event_committed"},
 		SnapshotURI: "local://snapshot/f2",
 	})
 	if err == nil || !strings.Contains(err.Error(), "upsert snapshot") {
@@ -121,7 +121,7 @@ func TestBuildVerifierFlowJSONQueryCancelled(t *testing.T) {
 	now := time.Now().UTC()
 	if err := UpsertFlow(ctx, db, FlowSnapshot{
 		Schema: "intentproof.flow.v1", FlowID: "f_qc", TenantID: "tnt_qc", CorrelationID: "corr_qc",
-		Window: SnapshotWindow{OpenedAt: now, ClosedAt: now, ClosureReason: "event_committed"},
+		Window:      SnapshotWindow{OpenedAt: now, ClosedAt: now, ClosureReason: "event_committed"},
 		SnapshotURI: "local://snapshot/f_qc",
 	}); err != nil {
 		t.Fatal(err)
