@@ -31,6 +31,25 @@ const (
 	chainAnchorPrevEventHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 )
 
+// refundListenTCP and refundNewHTTPClient are overridden in tests to exercise
+// RunRefund error paths without changing production defaults.
+var (
+	refundListenTCP         = net.Listen
+	refundNewHTTPClient     = func() *http.Client { return &http.Client{Timeout: 10 * time.Second} }
+	refundCompilePolicy     = policy.Compile
+	refundBuildFlowJSON     = localloop.BuildVerifierFlowJSON
+	refundVerifyFlow        = verifier.Verify
+	refundLoadEventsJSONL   = localloop.LoadEventsJSONL
+	refundLoadSDKPublicKeys = localloop.LoadSDKPublicKeysForCorrelation
+	refundBundleCreate      = bundle.Create
+	refundRegisterSDK       = localloop.RegisterSDKInstance
+	refundStartNATS         = localloop.StartEmbeddedNATS
+	refundGenerateKey       = ed25519.GenerateKey
+	refundUserHomeDir       = os.UserHomeDir
+	refundJSONMarshal       = json.Marshal
+	refundJSONMarshalIndent = json.MarshalIndent
+)
+
 // Options configures the refund demo.
 type Options struct {
 	Stdout io.Writer
@@ -55,7 +74,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 		opt.Stderr = os.Stderr
 	}
 	if opt.HomeDir == "" {
-		h, err := os.UserHomeDir()
+		h, err := refundUserHomeDir()
 		if err != nil {
 			return fmt.Errorf("home dir: %w", err)
 		}
@@ -83,7 +102,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 		}
 		priv = ed25519.NewKeyFromSeed(opt.PrivateKeySeed)
 	} else {
-		_, generated, err := ed25519.GenerateKey(rand.Reader)
+		_, generated, err := refundGenerateKey(rand.Reader)
 		if err != nil {
 			return fmt.Errorf("generate key: %w", err)
 		}
@@ -91,12 +110,12 @@ func RunRefund(ctx context.Context, opt Options) error {
 	}
 	instanceID := "inst_demo_refund"
 	regCtx := context.Background()
-	if err := localloop.RegisterSDKInstance(regCtx, db, localloop.LocalTenantID, instanceID, priv.Public().(ed25519.PublicKey)); err != nil {
+	if err := refundRegisterSDK(regCtx, db, localloop.LocalTenantID, instanceID, priv.Public().(ed25519.PublicKey)); err != nil {
 		return fmt.Errorf("register sdk: %w", err)
 	}
 
 	natsDir := filepath.Join(dataDir, "nats-demo")
-	nats, err := localloop.StartEmbeddedNATS(natsDir)
+	nats, err := refundStartNATS(natsDir)
 	if err != nil {
 		return fmt.Errorf("start nats: %w", err)
 	}
@@ -106,15 +125,15 @@ func RunRefund(ctx context.Context, opt Options) error {
 	defer stopFlow()
 	go func() { _ = localloop.NewFlowBuilder(db, nats).Run(flowCtx) }()
 
-	ingestL, err := net.Listen("tcp", "127.0.0.1:0")
+	ingestL, err := refundListenTCP("tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("listen ingest: %w", err)
 	}
-	verL, err := net.Listen("tcp", "127.0.0.1:0")
+	verL, err := refundListenTCP("tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("listen verifier: %w", err)
 	}
-	dashL, err := net.Listen("tcp", "127.0.0.1:0")
+	dashL, err := refundListenTCP("tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("listen dashboard: %w", err)
 	}
@@ -157,7 +176,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 		_ = dashHTTPSrv.Shutdown(shutdownCtx)
 	}()
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := refundNewHTTPClient()
 	if err := waitHTTP(ctx, client, []string{
 		ingestURL + "/healthz",
 		verifierURL + "/healthz",
@@ -190,16 +209,16 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return err
 	}
 
-	compiled, err := policy.Compile(refundPolicyYAML)
+	compiled, err := refundCompilePolicy(refundPolicyYAML)
 	if err != nil {
 		return fmt.Errorf("compile policy: %w", err)
 	}
-	policyJSON, err := json.Marshal(compiled.Policy)
+	policyJSON, err := refundJSONMarshal(compiled.Policy)
 	if err != nil {
 		return fmt.Errorf("marshal policy: %w", err)
 	}
 
-	flowJSON, err := localloop.BuildVerifierFlowJSON(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
+	flowJSON, err := refundBuildFlowJSON(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
 	if err != nil {
 		return fmt.Errorf("build flow json: %w", err)
 	}
@@ -211,7 +230,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 	}
 	defer restoreClock()
 
-	vrun, err := verifier.Verify(flowJSON, policyJSON, nil)
+	vrun, err := refundVerifyFlow(flowJSON, policyJSON, nil)
 	if err != nil {
 		return fmt.Errorf("verify: %w", err)
 	}
@@ -222,11 +241,11 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return fmt.Errorf("expected finding reason fail.required.missing, got %+v", vrun.Findings)
 	}
 
-	okFlowJSON, err := localloop.BuildVerifierFlowJSON(regCtx, db, localloop.LocalTenantID, corrRefundOK)
+	okFlowJSON, err := refundBuildFlowJSON(regCtx, db, localloop.LocalTenantID, corrRefundOK)
 	if err != nil {
 		return fmt.Errorf("build ok flow json: %w", err)
 	}
-	okRun, err := verifier.Verify(okFlowJSON, policyJSON, nil)
+	okRun, err := refundVerifyFlow(okFlowJSON, policyJSON, nil)
 	if err != nil {
 		return fmt.Errorf("verify ok path: %w", err)
 	}
@@ -234,16 +253,16 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return fmt.Errorf("expected verification pass on happy path, got %s", okRun.Status)
 	}
 
-	runJSON, err := json.MarshalIndent(vrun, "", "  ")
+	runJSON, err := refundJSONMarshalIndent(vrun, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal run: %w", err)
 	}
 
-	eventsJSONL, err := localloop.LoadEventsJSONL(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
+	eventsJSONL, err := refundLoadEventsJSONL(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
 	if err != nil {
 		return fmt.Errorf("load events jsonl: %w", err)
 	}
-	publicKeys, err := localloop.LoadSDKPublicKeysForCorrelation(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
+	publicKeys, err := refundLoadSDKPublicKeys(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
 	if err != nil {
 		return fmt.Errorf("load sdk public keys: %w", err)
 	}
@@ -252,7 +271,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 	if err := json.Unmarshal(flowJSON, &flowMap); err != nil {
 		return fmt.Errorf("flow map: %w", err)
 	}
-	flowPretty, err := json.MarshalIndent(flowMap, "", "  ")
+	flowPretty, err := refundJSONMarshalIndent(flowMap, "", "  ")
 	if err != nil {
 		return fmt.Errorf("flow indent: %w", err)
 	}
@@ -261,7 +280,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 	if err := json.Unmarshal(policyJSON, &policyMap); err != nil {
 		return fmt.Errorf("policy map: %w", err)
 	}
-	policyPretty, err := json.MarshalIndent(policyMap, "", "  ")
+	policyPretty, err := refundJSONMarshalIndent(policyMap, "", "  ")
 	if err != nil {
 		return fmt.Errorf("policy indent: %w", err)
 	}
@@ -271,7 +290,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 	if err != nil {
 		return fmt.Errorf("create bundle: %w", err)
 	}
-	err = bundle.Create(bf, bundle.CreateOptions{
+	err = refundBundleCreate(bf, bundle.CreateOptions{
 		BundleID:          "bnd_demo_refund",
 		FlowID:            vrun.FlowID,
 		TenantID:          localloop.LocalTenantID,

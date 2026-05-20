@@ -18,6 +18,21 @@ import (
 // ErrChainConflict means the event does not extend the existing chain.
 var ErrChainConflict = errors.New("localloop: chain conflict")
 
+// storeDBExec is overridden in tests to exercise OpenDB error paths.
+var storeDBExec = func(db *sql.DB, query string) (sql.Result, error) {
+	return db.Exec(query)
+}
+
+// storeTxExec is overridden in tests to exercise UpsertFlow error paths.
+var storeTxExec = func(ctx context.Context, tx *sql.Tx, query string, args ...any) (sql.Result, error) {
+	return tx.ExecContext(ctx, query, args...)
+}
+
+// storeTxCommit is overridden in tests to exercise transaction commit failures.
+var storeTxCommit = func(tx *sql.Tx) error {
+	return tx.Commit()
+}
+
 const schemaSQL = `
 CREATE TABLE IF NOT EXISTS tenants (
     tenant_id TEXT PRIMARY KEY,
@@ -90,15 +105,15 @@ func OpenDB(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
-	if _, err := db.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
+	if _, err := storeDBExec(db, `PRAGMA busy_timeout = 5000`); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("pragma busy_timeout: %w", err)
 	}
-	if _, err := db.Exec(schemaSQL); err != nil {
+	if _, err := storeDBExec(db, schemaSQL); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
-	if _, err := db.Exec(`PRAGMA journal_mode = WAL`); err != nil {
+	if _, err := storeDBExec(db, `PRAGMA journal_mode = WAL`); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("pragma journal_mode: %w", err)
 	}
@@ -209,7 +224,7 @@ func StoreEvent(ctx context.Context, db *sql.DB, ev ExecutionEvent, eventHash []
 		return false, err
 	}
 
-	res, err := tx.ExecContext(ctx, `
+	res, err := storeTxExec(ctx, tx, `
 		INSERT INTO execution_events (
 		  tenant_id, event_id, correlation_id, instance_id, chain_position,
 		  prev_event_hash, event_hash, action, status, started_at, completed_at,
@@ -228,7 +243,7 @@ func StoreEvent(ctx context.Context, db *sql.DB, ev ExecutionEvent, eventHash []
 	if err != nil {
 		return false, fmt.Errorf("rows affected: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := storeTxCommit(tx); err != nil {
 		return false, err
 	}
 	return n > 0, nil
@@ -328,7 +343,7 @@ func UpsertFlow(ctx context.Context, db *sql.DB, snap FlowSnapshot) error {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.ExecContext(ctx, `
+	_, err = storeTxExec(ctx, tx, `
 		INSERT INTO flows (
 		  tenant_id, flow_id, correlation_id, window_opened_at, window_closed_at,
 		  closure_reason, event_count, flow_merkle_root, instrumentation_mode,
@@ -354,7 +369,7 @@ func UpsertFlow(ctx context.Context, db *sql.DB, snap FlowSnapshot) error {
 		return fmt.Errorf("upsert flow: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, `
+	_, err = storeTxExec(ctx, tx, `
 		INSERT INTO snapshots (snapshot_id, tenant_id, flow_id, json_body)
 		VALUES (?,?,?,?)
 		ON CONFLICT (snapshot_id) DO UPDATE SET json_body = excluded.json_body`,
@@ -364,7 +379,7 @@ func UpsertFlow(ctx context.Context, db *sql.DB, snap FlowSnapshot) error {
 		return fmt.Errorf("upsert snapshot: %w", err)
 	}
 
-	return tx.Commit()
+	return storeTxCommit(tx)
 }
 
 // GetFlowByCorrelationID returns a flow snapshot for the given correlation.

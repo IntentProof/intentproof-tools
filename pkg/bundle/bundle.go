@@ -25,8 +25,13 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// Manifest is the canonical bundle manifest. It is signed by the platform
-// and included in the bundle as manifest.json.
+// bundleNewZstdWriter and bundleNewZstdReader are overridden in tests.
+var (
+	bundleNewZstdWriter = zstd.NewWriter
+	bundleNewZstdReader = zstd.NewReader
+)
+
+// Manifest is the canonical bundle manifest.
 type Manifest struct {
 	Schema      string             `json:"schema"`
 	BundleID    string             `json:"bundle_id"`
@@ -190,7 +195,7 @@ func Create(w io.Writer, opts CreateOptions) error {
 		return err
 	}
 
-	zw, err := zstd.NewWriter(w)
+	zw, err := bundleNewZstdWriter(w)
 	if err != nil {
 		return fmt.Errorf("create zstd writer: %w", err)
 	}
@@ -372,7 +377,7 @@ func bundleTarReader(r io.Reader) (*tar.Reader, error) {
 		return nil, fmt.Errorf("bundle.read_failed: %w", err)
 	}
 	if isZstdFrame(data) {
-		zr, err := zstd.NewReader(bytes.NewReader(data))
+		zr, err := bundleNewZstdReader(bytes.NewReader(data))
 		if err != nil {
 			return nil, fmt.Errorf("bundle.zstd_read_failed: %w", err)
 		}

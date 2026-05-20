@@ -22,6 +22,19 @@ import (
 	"github.com/intentproof/intentproof-tools/pkg/verifier"
 )
 
+var (
+	policyCmdJSONMarshal       = json.Marshal
+	policyCmdJSONMarshalIndent = json.MarshalIndent
+)
+
+func policyQueryAPIURL() string {
+	apiURL := strings.TrimSpace(os.Getenv("INTENTPROOF_QUERY_API_URL"))
+	if apiURL == "" {
+		apiURL = "http://localhost:8090"
+	}
+	return strings.TrimRight(apiURL, "/")
+}
+
 func runPolicyLint(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
 		fmt.Fprintln(stderr, "Usage: intentproof policy lint <policy.yaml>")
@@ -44,7 +57,7 @@ func runPolicyLint(args []string, stdout io.Writer, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "rule count: %d (%s)\n", len(result.Policy.Rules), strings.Join(parts, ", "))
 	fmt.Fprintf(stdout, "fingerprint: %s\n", result.Fingerprint)
 
-	canonical, err := json.MarshalIndent(result.Policy, "", "  ")
+	canonical, err := policyCmdJSONMarshalIndent(result.Policy, "", "  ")
 	if err != nil {
 		fmt.Fprintf(stderr, "render canonical policy: %v\n", err)
 		return 1
@@ -72,7 +85,7 @@ func runPolicyTest(args []string, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "policy compile failed: %v\n", err)
 		return 1
 	}
-	policyJSON, err := json.Marshal(compiled.Policy)
+	policyJSON, err := policyCmdJSONMarshal(compiled.Policy)
 	if err != nil {
 		fmt.Fprintf(stderr, "marshal canonical policy: %v\n", err)
 		return 1
@@ -131,7 +144,7 @@ func runOneFixture(dir string, policyJSON []byte) (bool, bool, error) {
 	if err != nil {
 		return false, false, err
 	}
-	runBytes, err := json.MarshalIndent(run, "", "  ")
+	runBytes, err := policyCmdJSONMarshalIndent(run, "", "  ")
 	if err != nil {
 		return false, false, err
 	}
@@ -259,7 +272,7 @@ func runPolicyPublish(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 
-	body, err := json.Marshal(bodyMap)
+	body, err := policyCmdJSONMarshal(bodyMap)
 	if err != nil {
 		fmt.Fprintf(stderr, "marshal policy: %v\n", err)
 		return 1
@@ -277,17 +290,13 @@ func runPolicyPublish(args []string, stdout io.Writer, stderr io.Writer) int {
 		Body:          body,
 	}
 
-	payload, err := json.Marshal(record)
+	payload, err := policyCmdJSONMarshal(record)
 	if err != nil {
 		fmt.Fprintf(stderr, "marshal request: %v\n", err)
 		return 1
 	}
 
-	apiURL := strings.TrimSpace(os.Getenv("INTENTPROOF_QUERY_API_URL"))
-	if apiURL == "" {
-		apiURL = "http://localhost:8090"
-	}
-	apiURL = strings.TrimRight(apiURL, "/")
+	apiURL := policyQueryAPIURL()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -466,7 +475,7 @@ func runPolicyActivate(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{
+	payload, err := policyCmdJSONMarshal(map[string]interface{}{
 		"tenant_id":      tenantID,
 		"scope":          scope,
 		"policy_id":      policyID,
@@ -478,11 +487,7 @@ func runPolicyActivate(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 
-	apiURL := strings.TrimSpace(os.Getenv("INTENTPROOF_QUERY_API_URL"))
-	if apiURL == "" {
-		apiURL = "http://localhost:8090"
-	}
-	apiURL = strings.TrimRight(apiURL, "/")
+	apiURL := policyQueryAPIURL()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -10,6 +10,8 @@ import (
 	"github.com/intentproof/intentproof-tools/pkg/localloop"
 )
 
+var demoGetwd = os.Getwd
+
 func runDemo(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
 		writeUsage(stderr, "Usage: intentproof demo <scenario>")
@@ -17,7 +19,7 @@ func runDemo(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 	switch args[0] {
 	case "refund":
-		wd, err := os.Getwd()
+		wd, err := demoGetwd()
 		if err != nil {
 			fmt.Fprintf(stderr, "working directory: %v\n", err)
 			return 1

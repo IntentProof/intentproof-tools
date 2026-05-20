@@ -1,6 +1,7 @@
 package localloop
 
 import (
+	"flag"
 	"os"
 	"os/exec"
 	"runtime"
@@ -16,6 +17,18 @@ const EnvLocalOpenBrowser = "INTENTPROOF_LOCAL_OPEN_BROWSER"
 // launchBrowser opens a URL in the system browser. Tests replace this hook so
 // `go test` never spawns a real browser tab.
 var launchBrowser = openDefaultBrowser
+
+// SetLaunchBrowserHook replaces the browser launcher for tests. The returned
+// function restores the previous hook. Pass nil to restore the default launcher.
+func SetLaunchBrowserHook(fn func(string) error) func() {
+	prev := launchBrowser
+	if fn == nil {
+		launchBrowser = openDefaultBrowser
+	} else {
+		launchBrowser = fn
+	}
+	return func() { launchBrowser = prev }
+}
 
 // MaybeOpenLocalDashboard schedules opening the dashboard URL in the system
 // default browser. It is non-blocking and no-ops when disabled or on
@@ -53,12 +66,24 @@ func localOpenBrowserEnabled() bool {
 	switch v {
 	case "0", "false", "no", "off":
 		return false
+	case "1", "true", "yes", "on":
+		return true
 	default:
+		if runningUnderGoTest() {
+			return false
+		}
 		return true
 	}
 }
 
+func runningUnderGoTest() bool {
+	return flag.Lookup("test.v") != nil
+}
+
 func openDefaultBrowser(url string) error {
+	if runningUnderGoTest() {
+		return nil
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		return exec.Command("open", url).Start()

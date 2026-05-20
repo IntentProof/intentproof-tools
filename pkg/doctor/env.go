@@ -7,6 +7,11 @@ import (
 	"github.com/intentproof/intentproof-tools/pkg/localloop"
 )
 
+var (
+	doctorUserHomeDir = os.UserHomeDir
+	doctorGetwd       = os.Getwd
+)
+
 const defaultLocalIngestEventsURL = "http://localhost:9787/v1/events"
 
 // ResolveIngestURL mirrors the Node SDK ingest URL resolution.

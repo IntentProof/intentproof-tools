@@ -10,6 +10,8 @@ import (
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
 )
 
+var verifyCmdJSONMarshalIndent = json.MarshalIndent
+
 func runVerify(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
 		writeUsage(stderr, "Usage: intentproof verify <bundle.proof.tar.zst>")
@@ -26,7 +28,7 @@ func runVerify(args []string, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "verify: %v\n", err)
 		return 1
 	}
-	out, err := json.MarshalIndent(vr, "", "  ")
+	out, err := verifyCmdJSONMarshalIndent(vr, "", "  ")
 	if err != nil {
 		fmt.Fprintf(stderr, "marshal result: %v\n", err)
 		return 1
