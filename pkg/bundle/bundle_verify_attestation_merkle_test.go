@@ -1,10 +1,10 @@
 package bundle
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
 	"archive/tar"
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"testing"

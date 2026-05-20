@@ -315,9 +315,9 @@ func TestVerifyObjectSignaturesRunBranch(t *testing.T) {
 		"alg": "ed25519", "key_id": "run:k1", "value": hex.EncodeToString(sig),
 	}
 	b := &Bundle{
-		PublicKeys: map[string][]byte{"run:k1": pub},
-		Run:        run,
-		Events:     []map[string]interface{}{},
+		PublicKeys:   map[string][]byte{"run:k1": pub},
+		Run:          run,
+		Events:       []map[string]interface{}{},
 		Attestations: []map[string]interface{}{},
 	}
 	findings, err := verifyObjectSignatures(b, nil)
