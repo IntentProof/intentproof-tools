@@ -27,6 +27,14 @@ var (
 	policyCmdJSONMarshalIndent = json.MarshalIndent
 )
 
+func policyQueryAPIURL() string {
+	apiURL := strings.TrimSpace(os.Getenv("INTENTPROOF_QUERY_API_URL"))
+	if apiURL == "" {
+		apiURL = "http://localhost:8090"
+	}
+	return strings.TrimRight(apiURL, "/")
+}
+
 func runPolicyLint(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
 		fmt.Fprintln(stderr, "Usage: intentproof policy lint <policy.yaml>")
@@ -288,11 +296,7 @@ func runPolicyPublish(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 
-	apiURL := strings.TrimSpace(os.Getenv("INTENTPROOF_QUERY_API_URL"))
-	if apiURL == "" {
-		apiURL = "http://localhost:8090"
-	}
-	apiURL = strings.TrimRight(apiURL, "/")
+	apiURL := policyQueryAPIURL()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -483,11 +487,7 @@ func runPolicyActivate(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 
-	apiURL := strings.TrimSpace(os.Getenv("INTENTPROOF_QUERY_API_URL"))
-	if apiURL == "" {
-		apiURL = "http://localhost:8090"
-	}
-	apiURL = strings.TrimRight(apiURL, "/")
+	apiURL := policyQueryAPIURL()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
