@@ -9,7 +9,6 @@
  */
 
 import javascript
-import semmle.javascript.security.dataflow.UnsafeHtmlConstructionQuery
 
 /** Holds if `prop` is dangerouslySetInnerHTML assignment. */
 predicate isDangerousInnerHTML(DataFlow::PropWrite prop) {

@@ -26,7 +26,7 @@ predicate isLegacyShimFile(File f) {
 
 /** Holds if `imp` imports crypto/sha1. */
 predicate isSHA1Import(ImportSpec imp) {
-  imp.getPath() = "\"crypto/sha1\"" or imp.getPath() = "crypto/sha1"
+  imp.getPath() = "crypto/sha1"
 }
 
 from ImportSpec imp

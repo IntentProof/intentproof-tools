@@ -37,11 +37,6 @@ predicate isDynamicSQLString(Expr expr) {
   )
   or
   exists(AddExpr add | add = expr)
-  or
-  exists(BinaryExpr bin |
-    bin = expr and
-    bin.getOperator() = "+"
-  )
 }
 
 /** Holds if `name` is a database method whose SQL string is argument 0. */

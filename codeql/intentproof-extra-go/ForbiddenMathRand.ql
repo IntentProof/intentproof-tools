@@ -12,10 +12,7 @@ import go
 
 /** Holds if `imp` imports a non-cryptographic math/rand package. */
 predicate isMathRandImport(ImportSpec imp) {
-  imp.getPath() = "\"math/rand\"" or
-  imp.getPath() = "math/rand" or
-  imp.getPath() = "\"math/rand/v2\"" or
-  imp.getPath() = "math/rand/v2"
+  imp.getPath() = "math/rand" or imp.getPath() = "math/rand/v2"
 }
 
 from ImportSpec imp
