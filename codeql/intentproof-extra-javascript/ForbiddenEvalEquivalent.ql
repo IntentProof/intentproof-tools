@@ -10,14 +10,29 @@
 
 import javascript
 
-/** Holds if `call` is eval() or new Function(...). */
-predicate isEvalEquivalent(DataFlow::CallNode call) {
-  call.getCalleeName() = "eval" or
-  call.getCalleeName() = "Function" or
-  call.getCalleeName() = "runInNewContext"
+/** Holds if `expr` is eval(), Function(), new Function(), or runInNewContext(). */
+predicate isEvalEquivalent(Expr expr) {
+  exists(CallExpr call |
+    expr = call and
+    (
+      call.getCalleeName() = "eval" or
+      call.getCalleeName() = "Function" or
+      call.getCalleeName() = "runInNewContext"
+    )
+  )
+  or
+  exists(NewExpr ne |
+    expr = ne and
+    ne.getCalleeName() = "Function"
+  )
+  or
+  exists(MethodCallExpr call |
+    expr = call and
+    call.getMethodName() = "runInNewContext"
+  )
 }
 
-from DataFlow::CallNode call
-where isEvalEquivalent(call)
-select call.getNode(),
+from Expr expr
+where isEvalEquivalent(expr)
+select expr,
   "eval-equivalent dynamic code execution is forbidden; use static parsing instead."
