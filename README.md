@@ -22,7 +22,7 @@ dependency invariant are normative for this repository:
 
 | Path | Purpose |
 |------|---------|
-| `cmd/intentproof-verify` | Pure-Go offline verifier. Takes a `.proof.tar.zst` bundle and prints pass/fail. |
+| `cmd/intentproof-verify` | Pure-Go offline verifier. Takes a `.proof.tar.zst` bundle and prints pass/fail. See [`docs/counterparty-verification.md`](docs/counterparty-verification.md). |
 | `cmd/intentproof` | Developer CLI. `policy lint`, `policy test`, `policy diff`, `policy publish`, `policy activate`, `local`. |
 | `cmd/intentproof-pkg-sign` | KMS-backed OpenPGP signing helper for package repository metadata. |
 | `pkg/verifier` | Deterministic DSL evaluator for the 7 canonical rule kinds. |

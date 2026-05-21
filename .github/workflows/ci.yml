@@ -41,6 +41,8 @@ jobs:
         env:
           INTENTPROOF_LOCAL_OPEN_BROWSER: "0"
         run: |
+          SPEC_ABS="$(cd intentproof-spec && pwd)"
+          export INTENTPROOF_SPEC_DIR="$SPEC_ABS"
           mapfile -t PACKAGES < <(go list ./... | grep -v '/cmd/local-seed$')
           go test -count=1 -coverprofile=coverage.out -covermode=atomic "${PACKAGES[@]}"
 
@@ -58,6 +60,9 @@ jobs:
 
       - name: Validate release workflow contracts
         run: python3 ./scripts/check-release-workflows.py
+
+      - name: Verify counterparty golden bundle stdout
+        run: bash ./scripts/check-counterparty-golden.sh
 
   tier-isolation:
     name: "IntentProof CI: Tier Isolation"

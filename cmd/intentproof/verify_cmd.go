@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
 )
@@ -13,8 +14,12 @@ import (
 var verifyCmdJSONMarshalIndent = json.MarshalIndent
 
 func runVerify(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+		writeUsage(stderr, verifyUsage())
+		return 1
+	}
 	if len(args) < 1 {
-		writeUsage(stderr, "Usage: intentproof verify <bundle.proof.tar.zst>")
+		writeUsage(stderr, verifyUsage())
 		return 1
 	}
 	path := args[0]
@@ -39,4 +44,16 @@ func runVerify(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+func verifyUsage() string {
+	return strings.Join([]string{
+		"Usage: intentproof verify <bundle.proof.tar.zst>",
+		"",
+		"Offline bundle verification (JSON stdout). For human-readable output",
+		"and the third-party playbook, use intentproof-verify instead.",
+		"",
+		"Counterparty playbook: https://github.com/IntentProof/intentproof-tools/blob/main/docs/counterparty-verification.md",
+		"Golden bundle: https://github.com/IntentProof/intentproof-spec/tree/main/golden/counterparty",
+	}, "\n")
 }

@@ -27,4 +27,14 @@ for Tier 2 commands lives in
 ## cmd/intentproof-verify
 
 - Missing arguments return exit code `1` and print usage to stderr.
+- `--help` / `-h` / `help` return exit code `1`, print usage plus counterparty
+  playbook and golden-bundle URLs to stderr.
 - Missing input files return exit code `1` with `error: read <file>: ...` on stderr.
+- Golden counterparty bundle stdout SHA-256 must match
+  `intentproof-spec/golden/counterparty/expected-verify-stdout-sha256.txt`
+  (`TestGoldenCounterpartyVerifyStdout`).
+
+## cmd/intentproof verify
+
+- Missing arguments or `--help` return exit code `1` and print usage with
+  counterparty playbook and golden-bundle URLs to stderr.
