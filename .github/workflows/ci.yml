@@ -40,8 +40,9 @@ jobs:
       - name: Run tests with coverage
         env:
           INTENTPROOF_LOCAL_OPEN_BROWSER: "0"
-          INTENTPROOF_SPEC_DIR: ./intentproof-spec
         run: |
+          SPEC_ABS="$(cd intentproof-spec && pwd)"
+          export INTENTPROOF_SPEC_DIR="$SPEC_ABS"
           mapfile -t PACKAGES < <(go list ./... | grep -v '/cmd/local-seed$')
           go test -count=1 -coverprofile=coverage.out -covermode=atomic "${PACKAGES[@]}"
 

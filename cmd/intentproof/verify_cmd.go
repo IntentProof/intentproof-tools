@@ -18,7 +18,7 @@ func runVerify(args []string, stdout io.Writer, stderr io.Writer) int {
 		writeUsage(stderr, "Usage: intentproof verify <bundle.proof.tar.zst>")
 		_, _ = fmt.Fprintln(stderr, "Counterparty playbook: docs/counterparty-verification.md")
 		_, _ = fmt.Fprintln(stderr, "Golden bundle: intentproof-spec/golden/counterparty/")
-		return 0
+		return 1
 	}
 	if len(args) < 1 {
 		writeUsage(stderr, verifyUsage())

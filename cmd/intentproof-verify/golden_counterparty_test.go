@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -38,7 +39,14 @@ func TestGoldenCounterpartyVerifyStdout(t *testing.T) {
 func resolveSpecDir(t *testing.T) string {
 	t.Helper()
 	if env := os.Getenv("INTENTPROOF_SPEC_DIR"); env != "" {
-		return env
+		if filepath.IsAbs(env) {
+			return env
+		}
+		modRoot, err := moduleRoot()
+		if err != nil {
+			t.Fatalf("resolve INTENTPROOF_SPEC_DIR: %v", err)
+		}
+		return filepath.Join(modRoot, env)
 	}
 	candidates := []string{
 		filepath.Join("..", "..", "intentproof-spec"),
@@ -55,4 +63,16 @@ func resolveSpecDir(t *testing.T) string {
 	}
 	t.Skip("intentproof-spec golden/counterparty not found; set INTENTPROOF_SPEC_DIR")
 	return ""
+}
+
+func moduleRoot() (string, error) {
+	out, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		return "", err
+	}
+	modPath := strings.TrimSpace(string(out))
+	if modPath == "" || modPath == "/dev/null" {
+		return "", err
+	}
+	return filepath.Dir(modPath), nil
 }

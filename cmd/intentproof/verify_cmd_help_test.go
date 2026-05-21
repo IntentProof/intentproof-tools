@@ -7,7 +7,7 @@ import (
 
 func TestRunVerifyHelp(t *testing.T) {
 	var stdout, stderr strings.Builder
-	if code := run([]string{"verify", "--help"}, &stdout, &stderr); code != 0 {
+	if code := run([]string{"verify", "--help"}, &stdout, &stderr); code != 1 {
 		t.Fatalf("help code=%d", code)
 	}
 	got := stderr.String()
