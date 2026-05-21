@@ -17,5 +17,5 @@ predicate isDangerousInnerHTML(DataFlow::PropWrite prop) {
 
 from DataFlow::PropWrite prop
 where isDangerousInnerHTML(prop)
-select prop.getNode(),
+select prop.getWriteNode(),
   "Unsanitized dangerouslySetInnerHTML is forbidden in server-side rendering paths."
