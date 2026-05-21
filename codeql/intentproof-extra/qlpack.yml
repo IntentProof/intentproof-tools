@@ -1,0 +1,7 @@
+name: intentproof/intentproof-extra
+version: 0.1.0
+description: IntentProof project-specific CodeQL rules (ADR-015 CI security gates)
+license: Apache-2.0
+dependencies:
+  codeql/go-all: "*"
+  codeql/javascript-all: "*"
