@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/intentproof/intentproof-tools/pkg/buildinfo"
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
@@ -24,6 +25,10 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
 		fmt.Fprintln(stdout, buildinfo.String("intentproof-verify"))
 		return 0
+	}
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
+		fmt.Fprintln(stderr, verifyUsage())
+		return 1
 	}
 
 	var outputPath string
@@ -138,8 +143,17 @@ func writeError(w io.Writer, format string, a ...any) int {
 }
 
 func writeUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Usage: intentproof-verify [--output <path>] <flow.json> <policy.json> <attestations.jsonl>")
-	_, _ = fmt.Fprintln(w, "       intentproof-verify <bundle.proof.tar.zst>")
+	_, _ = fmt.Fprintln(w, verifyUsage())
+}
+
+func verifyUsage() string {
+	return strings.Join([]string{
+		"Usage: intentproof-verify [--output <path>] <flow.json> <policy.json> <attestations.jsonl>",
+		"       intentproof-verify <bundle.proof.tar.zst>",
+		"",
+		"Counterparty playbook: https://github.com/IntentProof/intentproof-tools/blob/main/docs/counterparty-verification.md",
+		"Golden bundle: https://github.com/IntentProof/intentproof-spec/tree/main/golden/counterparty",
+	}, "\n")
 }
 
 func readInputFile(path string) ([]byte, error) {
