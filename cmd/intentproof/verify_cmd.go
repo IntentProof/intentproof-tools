@@ -15,9 +15,7 @@ var verifyCmdJSONMarshalIndent = json.MarshalIndent
 
 func runVerify(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		writeUsage(stderr, "Usage: intentproof verify <bundle.proof.tar.zst>")
-		_, _ = fmt.Fprintln(stderr, "Counterparty playbook: docs/counterparty-verification.md")
-		_, _ = fmt.Fprintln(stderr, "Golden bundle: intentproof-spec/golden/counterparty/")
+		writeUsage(stderr, verifyUsage())
 		return 1
 	}
 	if len(args) < 1 {

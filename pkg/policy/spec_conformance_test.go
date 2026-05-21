@@ -3,6 +3,7 @@ package policy
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -101,7 +102,7 @@ func moduleRoot() (string, error) {
 	}
 	modPath := strings.TrimSpace(string(out))
 	if modPath == "" || modPath == "/dev/null" {
-		return "", err
+		return "", fmt.Errorf("go env GOMOD: no module root")
 	}
 	return filepath.Dir(modPath), nil
 }
