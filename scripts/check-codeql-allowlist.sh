@@ -36,7 +36,7 @@ for line in text.splitlines():
         m = re.search(r"rule_id:\s*(\S+)", item)
         if m:
             current["rule_id"] = m.group(1)
-        m = re.match(r"expires:\s*(\S+)", item)
+        m = re.search(r"expires:\s*(\S+)", item)
         if m:
             current["expires"] = m.group(1)
         continue

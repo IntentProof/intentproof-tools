@@ -9,7 +9,6 @@
  */
 
 import go
-import semmle.go.dataflow.DataFlow
 
 /** Holds if `call` invokes a database query method by name. */
 predicate isDatabaseQueryCall(CallExpr call) {
