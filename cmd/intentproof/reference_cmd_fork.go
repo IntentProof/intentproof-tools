@@ -8,66 +8,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/intentproof/intentproof-tools/pkg/doctor"
 	"github.com/intentproof/intentproof-tools/pkg/policy"
 	"github.com/intentproof/intentproof-tools/pkg/verifier"
 	"gopkg.in/yaml.v3"
 )
-
-type referencePackManifest struct {
-	ReferenceID    string `json:"reference_id"`
-	Domain         string `json:"domain"`
-	Name           string `json:"name"`
-	Version        int    `json:"version"`
-	DisplayName    string `json:"display_name"`
-	Summary        string `json:"summary"`
-	Policy         string `json:"policy"`
-	PolicyYAML     string `json:"policy_yaml"`
-	MigrationNotes string `json:"migration_notes"`
-}
-
-type referencePack struct {
-	Manifest referencePackManifest
-	Dir      string
-}
-
-func runReference(args []string, stdout io.Writer, stderr io.Writer) int {
-	if len(args) < 1 {
-		fmt.Fprintln(stderr, "Usage: intentproof reference <subcommand>")
-		return 1
-	}
-
-	switch args[0] {
-	case "list":
-		return runReferenceList(args[1:], stdout, stderr)
-	case "fork":
-		return runReferenceFork(args[1:], stdout, stderr)
-	default:
-		writeUnknownCommand(stderr, "reference command", args[0])
-		return 1
-	}
-}
-
-func runReferenceList(args []string, stdout io.Writer, stderr io.Writer) int {
-	if len(args) != 0 {
-		fmt.Fprintln(stderr, "Usage: intentproof reference list")
-		return 1
-	}
-
-	packs, err := loadReferencePacks()
-	if err != nil {
-		fmt.Fprintf(stderr, "reference list failed: %v\n", err)
-		return 1
-	}
-	for _, pack := range packs {
-		fmt.Fprintf(stdout, "%s\t%s\t%s\n", pack.Manifest.ReferenceID, pack.Manifest.DisplayName, pack.Manifest.Summary)
-	}
-	return 0
-}
 
 func runReferenceFork(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) < 1 {
@@ -128,67 +75,6 @@ func runReferenceFork(args []string, stdout io.Writer, stderr io.Writer) int {
 
 	fmt.Fprintf(stdout, "forked %s to %s for tenant %s\n", referenceID, toPath, tenantID)
 	return 0
-}
-
-func loadReferencePacks() ([]referencePack, error) {
-	root, err := doctor.ResolveReferencePoliciesDir("")
-	if err != nil {
-		return nil, err
-	}
-
-	packs := make([]referencePack, 0)
-	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() || entry.Name() != "pack.json" {
-			return nil
-		}
-		pack, err := readReferencePack(path)
-		if err != nil {
-			return err
-		}
-		packs = append(packs, pack)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(packs, func(i, j int) bool {
-		return packs[i].Manifest.ReferenceID < packs[j].Manifest.ReferenceID
-	})
-	return packs, nil
-}
-
-func findReferencePack(referenceID string) (referencePack, error) {
-	packs, err := loadReferencePacks()
-	if err != nil {
-		return referencePack{}, err
-	}
-	for _, pack := range packs {
-		if pack.Manifest.ReferenceID == referenceID {
-			return pack, nil
-		}
-	}
-	return referencePack{}, fmt.Errorf("reference policy %q not found", referenceID)
-}
-
-func readReferencePack(manifestPath string) (referencePack, error) {
-	raw, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return referencePack{}, err
-	}
-	var manifest referencePackManifest
-	if err := json.Unmarshal(raw, &manifest); err != nil {
-		return referencePack{}, fmt.Errorf("parse %s: %w", manifestPath, err)
-	}
-	if strings.TrimSpace(manifest.ReferenceID) == "" {
-		return referencePack{}, fmt.Errorf("%s: reference_id is required", manifestPath)
-	}
-	return referencePack{
-		Manifest: manifest,
-		Dir:      filepath.Dir(manifestPath),
-	}, nil
 }
 
 func forkReferencePack(pack referencePack, dest string, tenantID string) error {
