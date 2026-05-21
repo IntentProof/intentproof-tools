@@ -24,10 +24,6 @@ func runVerify(args []string, stdout io.Writer, stderr io.Writer) int {
 		writeUsage(stderr, verifyUsage())
 		return 1
 	}
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
-		writeUsage(stderr, verifyUsage())
-		return 1
-	}
 	path := args[0]
 	raw, err := os.ReadFile(path)
 	if err != nil {
