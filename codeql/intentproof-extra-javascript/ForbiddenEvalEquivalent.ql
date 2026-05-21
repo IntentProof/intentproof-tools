@@ -14,10 +14,7 @@ import javascript
 predicate isEvalEquivalent(DataFlow::CallNode call) {
   call.getCalleeName() = "eval" or
   call.getCalleeName() = "Function" or
-  (
-    call.getCalleeName() = "runInNewContext" and
-    exists(DataFlow::CallNode recv | recv = call.getReceiver())
-  )
+  call.getCalleeName() = "runInNewContext"
 }
 
 from DataFlow::CallNode call

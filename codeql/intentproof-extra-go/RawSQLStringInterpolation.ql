@@ -44,11 +44,27 @@ predicate isDynamicSQLString(Expr expr) {
   )
 }
 
-from CallExpr call, Expr sqlArg, int idx
+/** Holds if `name` is a database method whose SQL string is argument 0. */
+predicate isNonContextDatabaseMethod(string name) {
+  name = "Query" or name = "QueryRow" or name = "Exec" or name = "Prepare"
+}
+
+/** Holds if `name` is a database method whose SQL string is argument 1. */
+predicate isContextDatabaseMethod(string name) {
+  name = "QueryContext" or
+  name = "QueryRowContext" or
+  name = "ExecContext" or
+  name = "PrepareContext"
+}
+
+from CallExpr call, Expr sqlArg, string name
 where
   isDatabaseQueryCall(call) and
-  idx = 0 and
-  sqlArg = call.getArgument(idx) and
+  name = call.getTarget().(Function).getName() and
+  (
+    (isNonContextDatabaseMethod(name) and sqlArg = call.getArgument(0)) or
+    (isContextDatabaseMethod(name) and sqlArg = call.getArgument(1))
+  ) and
   isDynamicSQLString(sqlArg)
 select call,
   "SQL query argument is built with string interpolation; use parameterized queries."

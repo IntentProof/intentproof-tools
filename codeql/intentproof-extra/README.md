@@ -1,7 +1,14 @@
-# intentproof-extra CodeQL query pack
+# intentproof-extra CodeQL query packs
 
 Project-specific static analysis rules for IntentProof public repositories,
 as defined in ADR-015 CI security gates.
+
+## Packs
+
+| Pack | Language | Path |
+|------|----------|------|
+| `intentproof-extra-go` | Go | `codeql/intentproof-extra-go/` |
+| `intentproof-extra-javascript` | JS/TS | `codeql/intentproof-extra-javascript/` |
 
 ## Queries
 
@@ -15,9 +22,9 @@ as defined in ADR-015 CI security gates.
 
 ## Usage
 
-Repositories reference this pack from `IntentProof/intentproof-tools` at
-`codeql/intentproof-extra/` in their CodeQL workflow. Error-severity findings
-are PR-blocking; warning-severity findings are advisory.
+Repositories reference the language-specific pack from `IntentProof/intentproof-tools`
+in their CodeQL workflow. Error-severity findings are PR-blocking; warning-severity
+findings are advisory.
 
 Allowlist exceptions live in each repo's `.github/codeql-allowlist.yml` with
 expiry dates and security on-call approval.
