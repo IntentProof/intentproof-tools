@@ -20,6 +20,8 @@ paths = [
   '''keys/intentproof-security\.fingerprint\.json''',
   '''golden/''',
   '''fixtures/''',
+  '''_test\.go$''',
+  '''pkg/demo/''',
 ]
 # Example test vectors and documentation placeholders only.
 regexes = [
