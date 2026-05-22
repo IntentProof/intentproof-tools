@@ -39,7 +39,7 @@ jobs:
         run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Run govulncheck
-        run: govulncheck -mode=module ./...
+        run: govulncheck ./...
 
   osv-scanner:
     name: "IntentProof Security: OSV-Scanner"
