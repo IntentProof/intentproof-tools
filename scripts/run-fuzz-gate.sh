@@ -23,6 +23,10 @@ echo "Running spec golden corpus and FuzzMarshalRaw seeds..."
 go test -count=1 ./pkg/canon/ -run='^(TestMarshalRawSpecCorpus|FuzzMarshalRaw)$'
 
 if [[ -n "${FUZZ_TIME:-}" ]]; then
+  if ! [[ "$FUZZ_TIME" =~ ^[0-9]+([smh]|ms|us|ns)$ ]]; then
+    echo "invalid FUZZ_TIME (expected Go duration, e.g. 30m): $FUZZ_TIME" >&2
+    exit 1
+  fi
   echo "Running FuzzMarshalRaw extended fuzz for ${FUZZ_TIME}..."
   go test -count=1 ./pkg/canon/ -run='^$' -fuzz=FuzzMarshalRaw -fuzztime="$FUZZ_TIME"
 fi
