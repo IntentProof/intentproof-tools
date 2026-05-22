@@ -151,6 +151,7 @@ func freeTCPPort(t *testing.T) int {
 }
 
 func waitHTTP200(t *testing.T, client *http.Client, url string) {
+	t.Helper()
 	waitHTTP200Within(t, client, url, 30*time.Second)
 }
 
