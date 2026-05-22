@@ -2,6 +2,7 @@
 package fuzzcorpus
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,54 +11,77 @@ import (
 	"testing"
 )
 
+var errSpecCorpusNotFound = errors.New("intentproof-spec golden/fuzz-corpora not found; set INTENTPROOF_SPEC_DIR")
+
 // Dir returns golden/fuzz-corpora/<name> under INTENTPROOF_SPEC_DIR or monorepo fallback.
 func Dir(t *testing.T, name string) string {
 	t.Helper()
-	base := specRoot(t)
-	dir := filepath.Join(base, "golden", "fuzz-corpora", name)
-	st, err := os.Stat(dir)
-	if err != nil || !st.IsDir() {
-		t.Fatalf("fuzz corpus not found: %s", dir)
-	}
-	abs, err := filepath.Abs(dir)
+	abs, err := dir(os.Getenv("INTENTPROOF_SPEC_DIR"), name)
 	if err != nil {
-		t.Fatalf("resolve corpus path: %v", err)
+		if errors.Is(err, errSpecCorpusNotFound) {
+			t.Skip(err.Error())
+		}
+		t.Fatal(err)
 	}
 	return abs
 }
 
-func specRoot(t *testing.T) string {
-	t.Helper()
-	if env := os.Getenv("INTENTPROOF_SPEC_DIR"); env != "" {
+func dir(specEnv, name string) (string, error) {
+	root, err := specRootFromEnv(specEnv)
+	if err != nil {
+		return "", err
+	}
+	return corpusDir(root, name)
+}
+
+func specRootFromEnv(env string) (string, error) {
+	if env != "" {
 		specDir := env
 		if !filepath.IsAbs(specDir) {
 			modRoot, err := moduleRoot()
 			if err != nil {
-				t.Fatalf("resolve INTENTPROOF_SPEC_DIR: %v", err)
+				return "", fmt.Errorf("resolve INTENTPROOF_SPEC_DIR: %w", err)
 			}
 			specDir = filepath.Join(modRoot, specDir)
 		}
 		corpusRoot := filepath.Join(specDir, "golden", "fuzz-corpora")
 		if st, err := os.Stat(corpusRoot); err == nil && st.IsDir() {
-			return specDir
+			return specDir, nil
 		}
-		t.Fatalf("INTENTPROOF_SPEC_DIR=%q but fuzz corpora not found under %s", env, corpusRoot)
+		return "", fmt.Errorf("INTENTPROOF_SPEC_DIR=%q but fuzz corpora not found under %s", env, corpusRoot)
+	}
+	modRoot, err := moduleRoot()
+	if err != nil {
+		return "", fmt.Errorf("resolve spec corpora: %w", err)
 	}
 	for _, candidate := range []string{
-		filepath.Join("..", "..", "intentproof-spec"),
-		filepath.Join("..", "..", "..", "intentproof-spec"),
+		filepath.Join(modRoot, "intentproof-spec"),
+		filepath.Join(modRoot, "..", "intentproof-spec"),
+		filepath.Join(modRoot, "..", "..", "intentproof-spec"),
 	} {
 		corpusRoot := filepath.Join(candidate, "golden", "fuzz-corpora")
 		if st, err := os.Stat(corpusRoot); err == nil && st.IsDir() {
 			abs, err := filepath.Abs(candidate)
 			if err != nil {
-				t.Fatalf("resolve spec path: %v", err)
+				return "", fmt.Errorf("resolve spec path: %w", err)
 			}
-			return abs
+			return abs, nil
 		}
 	}
-	t.Skip("intentproof-spec golden/fuzz-corpora not found; set INTENTPROOF_SPEC_DIR")
-	return ""
+	return "", errSpecCorpusNotFound
+}
+
+func corpusDir(base, name string) (string, error) {
+	dirPath := filepath.Join(base, "golden", "fuzz-corpora", name)
+	st, err := os.Stat(dirPath)
+	if err != nil || !st.IsDir() {
+		return "", fmt.Errorf("fuzz corpus not found: %s", dirPath)
+	}
+	abs, err := filepath.Abs(dirPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve corpus path: %w", err)
+	}
+	return abs, nil
 }
 
 func moduleRoot() (string, error) {
