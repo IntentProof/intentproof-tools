@@ -77,4 +77,33 @@ if [[ -n "${FUZZ_TIME:-}" ]]; then
   )
 fi
 
+run_jcs_differential() {
+  local node_dir python_dir
+  node_dir="$(resolve_checkout_dir "node sdk checkout" "${INTENTPROOF_NODE_SDK_DIR:-../intentproof-sdk-node}")"
+  python_dir="$(resolve_checkout_dir "python sdk checkout" "${INTENTPROOF_PYTHON_SDK_DIR:-../intentproof-sdk-python}")"
+
+  if [[ ! -f "${node_dir}/dist/signing.js" ]]; then
+    echo "building node sdk for jcs differential harness..."
+    (cd "${node_dir}" && npm ci && npm run build)
+  fi
+
+  echo "Running cross-language JCS differential harness..."
+  export INTENTPROOF_NODE_SDK_DIR="${node_dir}"
+  export INTENTPROOF_PYTHON_SDK_DIR="${python_dir}"
+  go test -count=1 ./cmd/jcs-differential-fuzz/
+  go run ./cmd/jcs-differential-fuzz/ -iterations "${JCS_DIFF_ITERATIONS:-256}"
+}
+
+if [[ "${SKIP_JCS_DIFFERENTIAL:-}" == "1" ]]; then
+  echo "SKIP: jcs differential harness (SKIP_JCS_DIFFERENTIAL=1)"
+elif [[ -d "${INTENTPROOF_NODE_SDK_DIR:-$ROOT/../intentproof-sdk-node}" ]] \
+  && [[ -d "${INTENTPROOF_PYTHON_SDK_DIR:-$ROOT/../intentproof-sdk-python}" ]]; then
+  run_jcs_differential || {
+    echo "jcs differential harness failed" >&2
+    exit 1
+  }
+else
+  echo "SKIP: jcs differential harness (node/python SDK checkouts not present)"
+fi
+
 echo "PASS: fuzz gate completed"

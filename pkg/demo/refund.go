@@ -48,6 +48,7 @@ var (
 	refundUserHomeDir       = os.UserHomeDir
 	refundJSONMarshal       = json.Marshal
 	refundJSONMarshalIndent = json.MarshalIndent
+	refundIndentJSON        = indentJSON
 )
 
 // Options configures the refund demo.
@@ -267,20 +268,11 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return fmt.Errorf("load sdk public keys: %w", err)
 	}
 
-	var flowMap map[string]interface{}
-	if err := json.Unmarshal(flowJSON, &flowMap); err != nil {
-		return fmt.Errorf("flow map: %w", err)
-	}
-	flowPretty, err := refundJSONMarshalIndent(flowMap, "", "  ")
+	flowPretty, err := refundIndentJSON(flowJSON)
 	if err != nil {
 		return fmt.Errorf("flow indent: %w", err)
 	}
-
-	var policyMap map[string]interface{}
-	if err := json.Unmarshal(policyJSON, &policyMap); err != nil {
-		return fmt.Errorf("policy map: %w", err)
-	}
-	policyPretty, err := refundJSONMarshalIndent(policyMap, "", "  ")
+	policyPretty, err := refundIndentJSON(policyJSON)
 	if err != nil {
 		return fmt.Errorf("policy indent: %w", err)
 	}
@@ -429,6 +421,14 @@ func demoIntentForAction(action string) string {
 	default:
 		return action
 	}
+}
+
+func indentJSON(raw []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func waitForCorrelationFlow(ctx context.Context, db *sql.DB, correlationID string, wantEvents int) error {
