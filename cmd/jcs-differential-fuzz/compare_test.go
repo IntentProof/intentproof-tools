@@ -25,7 +25,7 @@ func sdkDirs(t *testing.T) (nodeDir, pythonDir string, ok bool) {
 	if _, err := os.Stat(filepath.Join(nodeDir, "dist", "signing.js")); err != nil {
 		t.Skipf("node sdk dist missing (run npm run build): %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(pythonDir, "intentproof", "signing.py")); err != nil {
+	if _, err := os.Stat(filepath.Join(pythonDir, "intentproof", "canon.py")); err != nil {
 		t.Skipf("python sdk missing: %v", err)
 	}
 	return nodeDir, pythonDir, true

@@ -41,7 +41,7 @@ export INTENTPROOF_LOCAL_OPEN_BROWSER=0
 GOWORK=off go build ./...
 
 mapfile -t PACKAGES < <(
-  go list ./... \
+  GOWORK=off go list ./... \
     | grep -v '/cmd/local-seed$' \
     | grep -v '/cmd/jcs-differential-fuzz$'
 )

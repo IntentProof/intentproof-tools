@@ -112,13 +112,25 @@ func resolveConfig(cfg Config) (Config, error) {
 	if _, err := os.Stat(nodeSigning); err != nil {
 		return out, fmt.Errorf("node sdk dist missing (run npm run build in %s): %w", out.NodeSDKDir, err)
 	}
-	pyPkg := filepath.Join(filepath.Dir(out.PythonSDKDir), "pyproject.toml")
-	if _, err := os.Stat(pyPkg); err != nil {
-		if _, err2 := os.Stat(filepath.Join(out.PythonSDKDir, "intentproof", "signing.py")); err2 != nil {
-			return out, fmt.Errorf("python sdk not found at %s: %w", out.PythonSDKDir, err)
+	pyRoot, err := pythonSDKSrcRoot(out.PythonSDKDir)
+	if err != nil {
+		return out, fmt.Errorf("python sdk not found at %s: %w", out.PythonSDKDir, err)
+	}
+	out.PythonSDKDir = pyRoot
+	return out, nil
+}
+
+func pythonSDKSrcRoot(pythonSDKDir string) (string, error) {
+	candidates := []string{pythonSDKDir}
+	if filepath.Base(pythonSDKDir) != "src" {
+		candidates = append(candidates, filepath.Join(pythonSDKDir, "src"))
+	}
+	for _, root := range candidates {
+		if _, err := os.Stat(filepath.Join(root, "intentproof", "canon.py")); err == nil {
+			return root, nil
 		}
 	}
-	return out, nil
+	return "", fmt.Errorf("canon module not found under %s", pythonSDKDir)
 }
 
 func canonicalizeGo(raw json.RawMessage) ([]byte, error) {
@@ -194,9 +206,9 @@ func runNodeCanonicalize(ctx context.Context, cfg Config, input json.RawMessage)
 
 func runPythonCanonicalize(ctx context.Context, cfg Config, input json.RawMessage) ([]byte, error) {
 	script := filepath.Join(cfg.ScriptsDir, "python-canonicalize.py")
-	pyRoot := cfg.PythonSDKDir
-	if _, err := os.Stat(filepath.Join(pyRoot, "intentproof", "signing.py")); err != nil {
-		pyRoot = filepath.Join(filepath.Dir(pyRoot), "src")
+	pyRoot, err := pythonSDKSrcRoot(cfg.PythonSDKDir)
+	if err != nil {
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, cfg.PythonBinary, script, pyRoot)
 	cmd.Stdin = bytes.NewReader(input)

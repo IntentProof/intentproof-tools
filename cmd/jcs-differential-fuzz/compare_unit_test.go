@@ -101,6 +101,25 @@ func TestResolveConfigMissingSDK(t *testing.T) {
 	}
 }
 
+func TestPythonSDKSrcRootFindsNestedSrc(t *testing.T) {
+	repoRoot := t.TempDir()
+	srcRoot := filepath.Join(repoRoot, "src", "intentproof")
+	if err := os.MkdirAll(srcRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcRoot, "canon.py"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := pythonSDKSrcRoot(repoRoot)
+	if err != nil {
+		t.Fatalf("pythonSDKSrcRoot: %v", err)
+	}
+	want := filepath.Join(repoRoot, "src")
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestCompareOnceInvalidJSON(t *testing.T) {
 	err := compareOnce(mockConfig(t), []byte("{"), "")
 	if err == nil || !strings.Contains(err.Error(), "invalid json") {

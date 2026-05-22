@@ -40,6 +40,13 @@ func TestRunPythonCanonicalizeWithFakeBinary(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "python-canonicalize.py"), []byte("# stub"), 0o644); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
+	pySrc := filepath.Join(dir, "intentproof")
+	if err := os.MkdirAll(pySrc, 0o755); err != nil {
+		t.Fatalf("mkdir py src: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pySrc, "canon.py"), []byte(""), 0o644); err != nil {
+		t.Fatalf("write canon.py: %v", err)
+	}
 	fakePy := filepath.Join(dir, "python3")
 	script := "#!/bin/sh\nprintf '%s' '{\"a\":1,\"b\":2}'"
 	if err := os.WriteFile(fakePy, []byte(script), 0o755); err != nil {
@@ -78,8 +85,8 @@ func TestResolveConfigSuccess(t *testing.T) {
 	if err := os.MkdirAll(pySrc, 0o755); err != nil {
 		t.Fatalf("mkdir py src: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(pySrc, "signing.py"), []byte(""), 0o644); err != nil {
-		t.Fatalf("write signing.py: %v", err)
+	if err := os.WriteFile(filepath.Join(pySrc, "canon.py"), []byte(""), 0o644); err != nil {
+		t.Fatalf("write canon.py: %v", err)
 	}
 	cfg := Config{
 		NodeSDKDir:   nodeDir,
@@ -129,11 +136,14 @@ func TestRunWithProbeEnv(t *testing.T) {
 	old := compareOnceHook
 	defer func() { compareOnceHook = old }()
 	compareOnceHook = func(cfg Config, raw []byte, artifactDir string) error {
-		cfg.NodeCanonicalize = mockMatchGo(cfg)
-		cfg.PythonCanonicalize = mockMatchGo(cfg)
+		matchRealGo := func(_ context.Context, in json.RawMessage) ([]byte, error) {
+			return canonicalizeGo(in)
+		}
+		cfg.NodeCanonicalize = matchRealGo
+		cfg.PythonCanonicalize = matchRealGo
 		return compareOnce(cfg, raw, artifactDir)
 	}
-	if code := run([]string{"-iterations", "1"}); code != 0 {
+	if code := run([]string{"-iterations", "1"}); code != 1 {
 		t.Fatalf("expected probe divergence exit 1, got %d", code)
 	}
 }
@@ -185,8 +195,8 @@ func TestCompareInputAppliesConfigTimeout(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pyRoot, "pyproject.toml"), []byte(""), 0o644); err != nil {
 		t.Fatalf("write pyproject.toml: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(pySrc, "signing.py"), []byte(""), 0o644); err != nil {
-		t.Fatalf("write signing.py: %v", err)
+	if err := os.WriteFile(filepath.Join(pySrc, "canon.py"), []byte(""), 0o644); err != nil {
+		t.Fatalf("write canon.py: %v", err)
 	}
 
 	raw := json.RawMessage(`{"a":1}`)
