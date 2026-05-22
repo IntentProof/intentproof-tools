@@ -19,8 +19,13 @@ jobs:
   platform-fuzz:
     name: "IntentProof Security: Platform Fuzz"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: intentproof-tools
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: intentproof-tools
 
       - name: Read pinned spec ref
         id: spec_ref
@@ -58,17 +63,18 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: intentproof-tools/go.mod
+          cache-dependency-path: |
+            intentproof-tools/go.sum
+            intentproof-core/go.sum
 
       - name: Run fuzz gate
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           INPUT_FUZZ_TIME: ${{ inputs.fuzz_time }}
         run: |
-          SPEC_ABS="$(cd intentproof-spec && pwd)"
-          CORE_ABS="$(cd intentproof-core && pwd)"
-          export INTENTPROOF_SPEC_DIR="$SPEC_ABS"
-          export INTENTPROOF_CORE_DIR="$CORE_ABS"
+          export INTENTPROOF_SPEC_DIR="${{ github.workspace }}/intentproof-spec"
+          export INTENTPROOF_CORE_DIR="${{ github.workspace }}/intentproof-core"
           if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
             export FUZZ_TIME=30m
           elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -82,9 +88,9 @@ jobs:
         with:
           name: fuzz-crashes
           path: |
-            pkg/canon/testdata/fuzz/
-            pkg/verifier/testdata/fuzz/
-            pkg/bundle/testdata/fuzz/
-            pkg/policy/testdata/fuzz/
+            intentproof-tools/pkg/canon/testdata/fuzz/
+            intentproof-tools/pkg/verifier/testdata/fuzz/
+            intentproof-tools/pkg/bundle/testdata/fuzz/
+            intentproof-tools/pkg/policy/testdata/fuzz/
             intentproof-core/pkg/ingest/testdata/fuzz/
           if-no-files-found: ignore

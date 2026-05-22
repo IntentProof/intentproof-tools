@@ -5,19 +5,27 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-SPEC_DIR="${INTENTPROOF_SPEC_DIR:-./intentproof-spec}"
-if [[ "$SPEC_DIR" != /* ]]; then
-  SPEC_DIR="$(cd "$ROOT" && cd "$SPEC_DIR" && pwd)"
-else
-  SPEC_DIR="$(cd "$SPEC_DIR" && pwd)"
-fi
+resolve_checkout_dir() {
+  local label="$1"
+  local raw="$2"
+  local candidate=""
 
-CORE_DIR="${INTENTPROOF_CORE_DIR:-./intentproof-core}"
-if [[ "$CORE_DIR" != /* ]]; then
-  CORE_DIR="$(cd "$ROOT" && cd "$CORE_DIR" && pwd)"
-else
-  CORE_DIR="$(cd "$CORE_DIR" && pwd)"
-fi
+  if [[ "$raw" == /* ]]; then
+    candidate="$raw"
+  else
+    candidate="$ROOT/$raw"
+  fi
+
+  if [[ ! -d "$candidate" ]]; then
+    echo "${label} not found: ${raw}" >&2
+    exit 1
+  fi
+
+  (cd "$candidate" && pwd)
+}
+
+SPEC_DIR="$(resolve_checkout_dir "fuzz spec checkout" "${INTENTPROOF_SPEC_DIR:-./intentproof-spec}")"
+CORE_DIR="$(resolve_checkout_dir "intentproof-core checkout" "${INTENTPROOF_CORE_DIR:-./intentproof-core}")"
 
 for corpus in canon verifier bundle policy ingest; do
   if [[ ! -d "$SPEC_DIR/golden/fuzz-corpora/$corpus" ]]; then
@@ -35,7 +43,7 @@ go test -count=1 ./pkg/bundle/ -run='^(TestBundleVerifySpecCorpus|FuzzBundleVeri
 go test -count=1 ./pkg/policy/ -run='^(TestCompileSpecCorpus|FuzzCompile)$'
 
 if [[ ! -d "$CORE_DIR/pkg/ingest" ]]; then
-  echo "intentproof-core checkout not found: $CORE_DIR" >&2
+  echo "intentproof-core ingest package not found under: $CORE_DIR" >&2
   exit 1
 fi
 (
