@@ -16,11 +16,20 @@
 
 FROM gcr.io/oss-fuzz-base/base-builder-go
 
-RUN apt-get update && apt-get install -y git
+RUN apt-get update && apt-get install -y git zip
 
-RUN git clone --depth 1 https://github.com/IntentProof/intentproof-tools.git $SRC/intentproof-tools
-RUN git clone --depth 1 https://github.com/IntentProof/intentproof-spec.git $SRC/intentproof-spec
-RUN git clone --depth 1 https://github.com/IntentProof/intentproof-core.git $SRC/intentproof-core
+ENV TOOLS_REF=912952e4f9fcaf568b6ecc747f296d3413055ddf
+ENV SPEC_REF=808cf98781f65580b8027a0eddd3a017f2bc1ebb
+ENV CORE_REF=93f7625e7f97ec9bf74691bbc99322f8bbd70586
+
+RUN git clone https://github.com/IntentProof/intentproof-tools.git "$SRC/intentproof-tools" && \
+    cd "$SRC/intentproof-tools" && git checkout "$TOOLS_REF"
+
+RUN git clone https://github.com/IntentProof/intentproof-spec.git "$SRC/intentproof-spec" && \
+    cd "$SRC/intentproof-spec" && git checkout "$SPEC_REF"
+
+RUN git clone https://github.com/IntentProof/intentproof-core.git "$SRC/intentproof-core" && \
+    cd "$SRC/intentproof-core" && git checkout "$CORE_REF"
 
 WORKDIR $SRC/intentproof-tools
 COPY build.sh $SRC/
