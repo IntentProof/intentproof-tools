@@ -2,10 +2,24 @@ package fuzzcorpus
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestDirErrActionFor(t *testing.T) {
+	if dirErrActionFor(nil) != dirErrOK {
+		t.Fatalf("nil error = %v, want dirErrOK", dirErrActionFor(nil))
+	}
+	if dirErrActionFor(errSpecCorpusNotFound) != dirErrSkip {
+		t.Fatalf("not found = %v, want dirErrSkip", dirErrActionFor(errSpecCorpusNotFound))
+	}
+	if dirErrActionFor(fmt.Errorf("invalid spec dir")) != dirErrFatal {
+		t.Fatalf("generic error = %v, want dirErrFatal", dirErrActionFor(fmt.Errorf("invalid spec dir")))
+	}
+}
 
 func TestDirFromAbsoluteSpecEnv(t *testing.T) {
 	specRoot := t.TempDir()
@@ -118,6 +132,18 @@ func TestSpecRootFromEnvNotFound(t *testing.T) {
 		_, err := specRootFromEnv("")
 		if !errors.Is(err, errSpecCorpusNotFound) {
 			t.Fatalf("specRootFromEnv(\"\") = %v, want errSpecCorpusNotFound", err)
+		}
+	})
+}
+
+func TestSpecRootFromEnvWithoutModuleRoot(t *testing.T) {
+	withIsolatedWorkdir(t, func(t *testing.T) {
+		_, err := specRootFromEnv("")
+		if err == nil {
+			t.Fatal("expected error without module root")
+		}
+		if !strings.Contains(err.Error(), "resolve spec corpora") {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 }

@@ -13,14 +13,32 @@ import (
 
 var errSpecCorpusNotFound = errors.New("intentproof-spec golden/fuzz-corpora not found; set INTENTPROOF_SPEC_DIR")
 
+type dirErrAction int
+
+const (
+	dirErrOK dirErrAction = iota
+	dirErrSkip
+	dirErrFatal
+)
+
+func dirErrActionFor(err error) dirErrAction {
+	if err == nil {
+		return dirErrOK
+	}
+	if errors.Is(err, errSpecCorpusNotFound) {
+		return dirErrSkip
+	}
+	return dirErrFatal
+}
+
 // Dir returns golden/fuzz-corpora/<name> under INTENTPROOF_SPEC_DIR or monorepo fallback.
 func Dir(t *testing.T, name string) string {
 	t.Helper()
 	abs, err := dir(os.Getenv("INTENTPROOF_SPEC_DIR"), name)
-	if err != nil {
-		if errors.Is(err, errSpecCorpusNotFound) {
-			t.Skip(err.Error())
-		}
+	switch dirErrActionFor(err) {
+	case dirErrSkip:
+		t.Skip(err.Error())
+	case dirErrFatal:
 		t.Fatal(err)
 	}
 	return abs
