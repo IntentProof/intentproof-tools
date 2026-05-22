@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the JCS canonicalizer fuzz gate: golden corpus replay and optional fuzz.
+# Run platform fuzz gates: golden corpus replay and optional extended fuzz.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,24 +11,39 @@ if [[ "$SPEC_DIR" != /* ]]; then
 else
   SPEC_DIR="$(cd "$SPEC_DIR" && pwd)"
 fi
-CORPUS_DIR="$SPEC_DIR/golden/fuzz-corpora/canon"
-if [[ ! -d "$CORPUS_DIR" ]]; then
-  echo "fuzz corpus not found: $CORPUS_DIR" >&2
-  exit 1
-fi
+
+for corpus in canon verifier bundle policy; do
+  if [[ ! -d "$SPEC_DIR/golden/fuzz-corpora/$corpus" ]]; then
+    echo "fuzz corpus not found: $SPEC_DIR/golden/fuzz-corpora/$corpus" >&2
+    exit 1
+  fi
+done
 
 export INTENTPROOF_SPEC_DIR="$SPEC_DIR"
 
-echo "Running spec golden corpus and FuzzMarshalRaw seeds..."
+echo "Running spec golden corpora and fuzz seed replay..."
 go test -count=1 ./pkg/canon/ -run='^(TestMarshalRawSpecCorpus|FuzzMarshalRaw)$'
+go test -count=1 ./pkg/verifier/ -run='^(TestVerifySpecCorpus|FuzzVerify)$'
+go test -count=1 ./pkg/bundle/ -run='^(TestBundleVerifySpecCorpus|FuzzBundleVerify)$'
+go test -count=1 ./pkg/policy/ -run='^(TestCompileSpecCorpus|FuzzCompile)$'
 
 if [[ -n "${FUZZ_TIME:-}" ]]; then
   if ! [[ "$FUZZ_TIME" =~ ^[0-9]+([smh]|ms|us|ns)$ ]]; then
     echo "invalid FUZZ_TIME (expected Go duration, e.g. 30m): $FUZZ_TIME" >&2
     exit 1
   fi
-  echo "Running FuzzMarshalRaw extended fuzz for ${FUZZ_TIME}..."
-  go test -count=1 ./pkg/canon/ -run='^$' -fuzz=FuzzMarshalRaw -fuzztime="$FUZZ_TIME"
+  targets=(
+    "./pkg/canon/:FuzzMarshalRaw"
+    "./pkg/verifier/:FuzzVerify"
+    "./pkg/bundle/:FuzzBundleVerify"
+    "./pkg/policy/:FuzzCompile"
+  )
+  for target in "${targets[@]}"; do
+    pkg="${target%%:*}"
+    fuzz="${target##*:}"
+    echo "Running ${fuzz} extended fuzz for ${FUZZ_TIME}..."
+    go test -count=1 "$pkg" -run='^$' -fuzz="$fuzz" -fuzztime="$FUZZ_TIME"
+  done
 fi
 
 echo "PASS: fuzz gate completed"

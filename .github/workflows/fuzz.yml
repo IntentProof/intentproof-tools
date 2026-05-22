@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       fuzz_time:
-        description: Go fuzz duration (for example 30m or 1h)
+        description: Go fuzz duration per target (for example 30m or 1h)
         required: false
         default: "30m"
 
@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  canon-fuzz:
-    name: "IntentProof Security: JCS Fuzz"
+  platform-fuzz:
+    name: "IntentProof Security: Platform Fuzz"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +61,10 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-crashes-canon
-          path: pkg/canon/testdata/fuzz/FuzzMarshalRaw/
+          name: fuzz-crashes
+          path: |
+            pkg/canon/testdata/fuzz/
+            pkg/verifier/testdata/fuzz/
+            pkg/bundle/testdata/fuzz/
+            pkg/policy/testdata/fuzz/
           if-no-files-found: ignore
