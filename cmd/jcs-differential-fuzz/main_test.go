@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-var compareOnceHook = compareOnce
-
 func TestRunSingleInputMocked(t *testing.T) {
 	dir := t.TempDir()
 	input := filepath.Join(dir, "event.json")

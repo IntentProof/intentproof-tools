@@ -77,6 +77,9 @@ func run(args []string) int {
 	return 0
 }
 
+// compareOnceHook is overridden in tests to inject mock canonicalizers.
+var compareOnceHook = compareOnce
+
 func compareOnce(cfg Config, raw []byte, artifactDir string) error {
 	if !json.Valid(raw) {
 		return fmt.Errorf("invalid json input")
