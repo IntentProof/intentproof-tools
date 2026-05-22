@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"path/filepath"
+	"testing"
 )
 
 func FuzzJCSCrossLanguage(f *testing.F) {

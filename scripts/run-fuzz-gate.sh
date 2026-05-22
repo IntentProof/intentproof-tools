@@ -90,6 +90,7 @@ run_jcs_differential() {
   echo "Running cross-language JCS differential harness..."
   export INTENTPROOF_NODE_SDK_DIR="${node_dir}"
   export INTENTPROOF_PYTHON_SDK_DIR="${python_dir}/src"
+  go test -count=1 ./cmd/jcs-differential-fuzz/
   go run ./cmd/jcs-differential-fuzz/ -iterations "${JCS_DIFF_ITERATIONS:-256}"
 }
 

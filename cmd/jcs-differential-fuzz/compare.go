@@ -19,32 +19,34 @@ const defaultTimeout = 30 * time.Second
 
 // Config locates SDK checkouts and helper scripts for subprocess canonicalizers.
 type Config struct {
-	NodeSDKDir    string
-	PythonSDKDir  string
-	ScriptsDir    string
-	Timeout       time.Duration
-	NodeBinary    string
-	PythonBinary  string
-	GoCanonicalize func(json.RawMessage) ([]byte, error)
+	NodeSDKDir         string
+	PythonSDKDir       string
+	ScriptsDir         string
+	Timeout            time.Duration
+	NodeBinary         string
+	PythonBinary       string
+	GoCanonicalize     func(json.RawMessage) ([]byte, error)
+	NodeCanonicalize   func(context.Context, json.RawMessage) ([]byte, error)
+	PythonCanonicalize func(context.Context, json.RawMessage) ([]byte, error)
 }
 
 func defaultConfig() Config {
 	return Config{
-		Timeout:      defaultTimeout,
-		NodeBinary:   "node",
-		PythonBinary: "python3",
+		Timeout:        defaultTimeout,
+		NodeBinary:     "node",
+		PythonBinary:   "python3",
 		GoCanonicalize: canonicalizeGo,
 	}
 }
 
 // DivergenceError is returned when Go, Node, and Python canonicalizers disagree.
 type DivergenceError struct {
-	Input      []byte
-	GoOut      []byte
-	NodeOut    []byte
-	PythonOut  []byte
-	NodeErr    error
-	PythonErr  error
+	Input     []byte
+	GoOut     []byte
+	NodeOut   []byte
+	PythonOut []byte
+	NodeErr   error
+	PythonErr error
 }
 
 func (e *DivergenceError) Error() string {
@@ -79,6 +81,9 @@ func resolveConfig(cfg Config) (Config, error) {
 	}
 	if out.GoCanonicalize == nil {
 		out.GoCanonicalize = canonicalizeGo
+	}
+	if out.NodeCanonicalize != nil && out.PythonCanonicalize != nil {
+		return out, nil
 	}
 	if out.ScriptsDir == "" {
 		out.ScriptsDir = filepath.Join("cmd", "jcs-differential-fuzz", "scripts")
@@ -138,8 +143,8 @@ func compareInput(ctx context.Context, cfg Config, input json.RawMessage) error 
 		return fmt.Errorf("go canonicalize: %w", err)
 	}
 
-	nodeOut, nodeErr := runNodeCanonicalize(ctx, cfg, input)
-	pyOut, pyErr := runPythonCanonicalize(ctx, cfg, input)
+	nodeOut, nodeErr := canonicalizeNode(ctx, cfg, input)
+	pyOut, pyErr := canonicalizePython(ctx, cfg, input)
 	if nodeErr != nil {
 		return fmt.Errorf("node canonicalize: %w", nodeErr)
 	}
@@ -156,6 +161,20 @@ func compareInput(ctx context.Context, cfg Config, input json.RawMessage) error 
 		NodeOut:   nodeOut,
 		PythonOut: pyOut,
 	}
+}
+
+func canonicalizeNode(ctx context.Context, cfg Config, input json.RawMessage) ([]byte, error) {
+	if cfg.NodeCanonicalize != nil {
+		return cfg.NodeCanonicalize(ctx, input)
+	}
+	return runNodeCanonicalize(ctx, cfg, input)
+}
+
+func canonicalizePython(ctx context.Context, cfg Config, input json.RawMessage) ([]byte, error) {
+	if cfg.PythonCanonicalize != nil {
+		return cfg.PythonCanonicalize(ctx, input)
+	}
+	return runPythonCanonicalize(ctx, cfg, input)
 }
 
 func runNodeCanonicalize(ctx context.Context, cfg Config, input json.RawMessage) ([]byte, error) {

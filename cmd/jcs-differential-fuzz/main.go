@@ -57,7 +57,7 @@ func run(args []string) int {
 			fmt.Fprintf(os.Stderr, "read input: %v\n", err)
 			return 2
 		}
-		if err := compareOnce(cfg, raw, *artifactDir); err != nil {
+		if err := compareOnceHook(cfg, raw, *artifactDir); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			return 1
 		}
@@ -68,7 +68,7 @@ func run(args []string) int {
 	for i := 0; i < *iterations; i++ {
 		seed := []byte("jcs-diff-" + strconv.Itoa(*seedBase+i))
 		raw := buildEventFromSeed(seed)
-		if err := compareOnce(cfg, raw, *artifactDir); err != nil {
+		if err := compareOnceHook(cfg, raw, *artifactDir); err != nil {
 			fmt.Fprintf(os.Stderr, "iteration %d: %v\n", i, err)
 			return 1
 		}

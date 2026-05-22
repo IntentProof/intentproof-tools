@@ -43,7 +43,7 @@ jobs:
         run: |
           SPEC_ABS="$(cd intentproof-spec && pwd)"
           export INTENTPROOF_SPEC_DIR="$SPEC_ABS"
-          mapfile -t PACKAGES < <(go list ./... | grep -v '/cmd/local-seed$')
+          mapfile -t PACKAGES < <(go list ./... | grep -v '/cmd/local-seed$' | grep -v '/cmd/jcs-differential-fuzz$')
           go test -count=1 -coverprofile=coverage.out -covermode=atomic "${PACKAGES[@]}"
 
       - name: Enforce coverage threshold

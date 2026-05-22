@@ -73,7 +73,7 @@ func TestCompareGeneratedSeeds(t *testing.T) {
 }
 
 func TestProbeDetectsDivergenceWithArtifact(t *testing.T) {
-	cfg := testConfig(t)
+	cfg := mockConfig(t)
 	cfg.GoCanonicalize = brokenGoCanonicalize
 	raw := buildEventFromSeed([]byte("probe-seed"))
 	dir := t.TempDir()
