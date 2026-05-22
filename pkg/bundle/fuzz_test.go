@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/intentproof/intentproof-tools/internal/fuzzcorpus"
+	"github.com/intentproof/intentproof-tools/pkg/fuzzcorpus"
 )
 
 var bundleSeeds = [][]byte{

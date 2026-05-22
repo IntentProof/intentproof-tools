@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/intentproof/intentproof-tools/internal/fuzzcorpus"
+	"github.com/intentproof/intentproof-tools/pkg/fuzzcorpus"
 )
 
 func TestMarshalRawSpecCorpus(t *testing.T) {
