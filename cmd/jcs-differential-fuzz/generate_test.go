@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestBuildEventFromSeedProducesValidJSON(t *testing.T) {
@@ -35,6 +36,27 @@ func TestGenerateJSONValueSingleByteBoolBranch(t *testing.T) {
 	// seed[0] % 7 == 2 with len(seed) == 1 must not panic.
 	if got := generateJSONValue([]byte{2}); got != false {
 		t.Fatalf("expected false, got %v", got)
+	}
+}
+
+func TestGenerateJSONValueDepthBounded(t *testing.T) {
+	seed := make([]byte, 256)
+	for i := range seed {
+		seed[i] = byte(i)
+	}
+	seed[0] = 4
+	seed[1] = 4
+	seed[2] = 4
+	seed[3] = 4
+	done := make(chan struct{})
+	go func() {
+		_ = generateJSONValue(seed)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("generateJSONValue did not finish within timeout")
 	}
 }
 

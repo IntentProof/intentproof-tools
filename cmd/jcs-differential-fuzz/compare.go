@@ -45,8 +45,6 @@ type DivergenceError struct {
 	GoOut     []byte
 	NodeOut   []byte
 	PythonOut []byte
-	NodeErr   error
-	PythonErr error
 }
 
 func (e *DivergenceError) Error() string {

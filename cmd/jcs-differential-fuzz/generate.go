@@ -5,10 +5,18 @@ import (
 	"fmt"
 )
 
+const (
+	maxEventSeedBytes = 128
+	maxJSONValueDepth = 6
+)
+
 // buildEventFromSeed returns ExecutionEvent.v1 shaped JSON for differential
 // canonicalization. Required fields are always present; optional nested
 // payloads are derived deterministically from seed bytes.
 func buildEventFromSeed(seed []byte) json.RawMessage {
+	if len(seed) > maxEventSeedBytes {
+		seed = seed[:maxEventSeedBytes]
+	}
 	event := map[string]any{
 		"schema":            "intentproof.event.v1",
 		"event_id":          "evt_diff_fuzz",
@@ -100,7 +108,7 @@ func pickOptionalNested(seed []byte, idx int) any {
 	if len(seed) <= idx {
 		return nil
 	}
-	return generateJSONValue(seed[idx:])
+	return generateJSONValueDepth(seed[idx:], 0)
 }
 
 func pickAttributes(seed []byte) map[string]any {
@@ -123,7 +131,11 @@ func pickAttributes(seed []byte) map[string]any {
 }
 
 func generateJSONValue(seed []byte) any {
-	if len(seed) == 0 {
+	return generateJSONValueDepth(seed, 0)
+}
+
+func generateJSONValueDepth(seed []byte, depth int) any {
+	if depth >= maxJSONValueDepth || len(seed) == 0 {
 		return map[string]any{}
 	}
 	switch seed[0] % 7 {
@@ -142,17 +154,18 @@ func generateJSONValue(seed []byte) any {
 	case 3:
 		return nil
 	case 4:
-		out := make([]any, 0, 3)
-		for i := 1; i < len(seed) && i < 4; i++ {
-			out = append(out, generateJSONValue(seed[i:]))
+		out := make([]any, 0, 2)
+		for i := 1; i < len(seed) && i < 3 && len(out) < 2; i++ {
+			out = append(out, generateJSONValueDepth(seed[i+1:], depth+1))
 		}
 		return out
 	case 5:
-		obj := make(map[string]any)
-		for i := 1; i+1 < len(seed) && i < 10; i += 2 {
-			obj[fmt.Sprintf("k%d", i)] = generateJSONValue(seed[i+1:])
+		if len(seed) < 3 {
+			return map[string]any{}
 		}
-		return obj
+		return map[string]any{
+			fmt.Sprintf("k%d", depth): generateJSONValueDepth(seed[2:], depth+1),
+		}
 	default:
 		if len(seed) > 1 {
 			return float64(seed[1]) / 10.0
