@@ -61,6 +61,22 @@ jobs:
           ref: ${{ steps.core_ref.outputs.ref }}
           path: intentproof-core
 
+      - name: Checkout intentproof-sdk-node
+        uses: actions/checkout@v4
+        with:
+          repository: IntentProof/intentproof-sdk-node
+          path: intentproof-sdk-node
+
+      - name: Checkout intentproof-sdk-python
+        uses: actions/checkout@v4
+        with:
+          repository: IntentProof/intentproof-sdk-python
+          path: intentproof-sdk-python
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: intentproof-tools/go.mod
@@ -75,6 +91,8 @@ jobs:
         run: |
           export INTENTPROOF_SPEC_DIR="${{ github.workspace }}/intentproof-spec"
           export INTENTPROOF_CORE_DIR="${{ github.workspace }}/intentproof-core"
+          export INTENTPROOF_NODE_SDK_DIR="${{ github.workspace }}/intentproof-sdk-node"
+          export INTENTPROOF_PYTHON_SDK_DIR="${{ github.workspace }}/intentproof-sdk-python"
           if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
             export FUZZ_TIME=30m
           elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
