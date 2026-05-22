@@ -12,7 +12,14 @@ else
   SPEC_DIR="$(cd "$SPEC_DIR" && pwd)"
 fi
 
-for corpus in canon verifier bundle policy; do
+CORE_DIR="${INTENTPROOF_CORE_DIR:-./intentproof-core}"
+if [[ "$CORE_DIR" != /* ]]; then
+  CORE_DIR="$(cd "$ROOT" && cd "$CORE_DIR" && pwd)"
+else
+  CORE_DIR="$(cd "$CORE_DIR" && pwd)"
+fi
+
+for corpus in canon verifier bundle policy ingest; do
   if [[ ! -d "$SPEC_DIR/golden/fuzz-corpora/$corpus" ]]; then
     echo "fuzz corpus not found: $SPEC_DIR/golden/fuzz-corpora/$corpus" >&2
     exit 1
@@ -26,6 +33,16 @@ go test -count=1 ./pkg/canon/ -run='^(TestMarshalRawSpecCorpus|FuzzMarshalRaw)$'
 go test -count=1 ./pkg/verifier/ -run='^(TestVerifySpecCorpus|FuzzVerify)$'
 go test -count=1 ./pkg/bundle/ -run='^(TestBundleVerifySpecCorpus|FuzzBundleVerify)$'
 go test -count=1 ./pkg/policy/ -run='^(TestCompileSpecCorpus|FuzzCompile)$'
+
+if [[ ! -d "$CORE_DIR/pkg/ingest" ]]; then
+  echo "intentproof-core checkout not found: $CORE_DIR" >&2
+  exit 1
+fi
+(
+  cd "$CORE_DIR"
+  export INTENTPROOF_SPEC_DIR="$SPEC_DIR"
+  go test -count=1 ./pkg/ingest/ -run='^(TestParseExecutionEventSpecCorpus|FuzzParseExecutionEvent)$'
+)
 
 if [[ -n "${FUZZ_TIME:-}" ]]; then
   if ! [[ "$FUZZ_TIME" =~ ^[0-9]+([smh]|ms|us|ns)$ ]]; then
@@ -44,6 +61,12 @@ if [[ -n "${FUZZ_TIME:-}" ]]; then
     echo "Running ${fuzz} extended fuzz for ${FUZZ_TIME}..."
     go test -count=1 "$pkg" -run='^$' -fuzz="$fuzz" -fuzztime="$FUZZ_TIME"
   done
+  (
+    cd "$CORE_DIR"
+    export INTENTPROOF_SPEC_DIR="$SPEC_DIR"
+    echo "Running FuzzParseExecutionEvent extended fuzz for ${FUZZ_TIME}..."
+    go test -count=1 ./pkg/ingest/ -run='^$' -fuzz=FuzzParseExecutionEvent -fuzztime="$FUZZ_TIME"
+  )
 fi
 
 echo "PASS: fuzz gate completed"

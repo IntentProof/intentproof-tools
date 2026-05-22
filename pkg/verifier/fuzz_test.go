@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/intentproof/intentproof-tools/internal/fuzzcorpus"
+	"github.com/intentproof/intentproof-tools/pkg/fuzzcorpus"
 )
 
 type verifyCorpusCase struct {
