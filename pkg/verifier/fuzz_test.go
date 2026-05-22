@@ -3,6 +3,7 @@ package verifier
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,9 +71,9 @@ func TestVerifySpecCorpus(t *testing.T) {
 			if err := json.Unmarshal(data, &tc); err != nil {
 				t.Fatalf("decode corpus case: %v", err)
 			}
-			atts := bytes.TrimSpace([]byte(tc.Attestations))
-			if len(atts) == 0 || bytes.Equal(atts, []byte("null")) {
-				atts = nil
+			atts, err := attestationsFromCorpusJSON(tc.Attestations)
+			if err != nil {
+				t.Fatalf("decode corpus attestations: %v", err)
 			}
 			if _, err := Verify([]byte(tc.Flow), []byte(tc.Policy), atts); err != nil {
 				t.Fatalf("Verify golden corpus: %v", err)
@@ -82,4 +83,73 @@ func TestVerifySpecCorpus(t *testing.T) {
 	if ran == 0 {
 		t.Fatalf("no .json corpus files under %s", dir)
 	}
+}
+
+// attestationsFromCorpusJSON converts golden corpus attestations into the JSONL
+// bytes expected by Verify. Corpus files store JSON null, a JSON array of
+// attestation objects, a single JSON object, or raw JSONL lines.
+func attestationsFromCorpusJSON(raw json.RawMessage) ([]byte, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return nil, nil
+	}
+	switch raw[0] {
+	case '[':
+		var items []json.RawMessage
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, fmt.Errorf("decode attestations array: %w", err)
+		}
+		var buf bytes.Buffer
+		for _, item := range items {
+			item = bytes.TrimSpace(item)
+			if len(item) == 0 {
+				continue
+			}
+			buf.Write(item)
+			buf.WriteByte('\n')
+		}
+		return buf.Bytes(), nil
+	case '{':
+		return append(append([]byte(nil), raw...), '\n'), nil
+	default:
+		return raw, nil
+	}
+}
+
+func TestAttestationsFromCorpusJSON(t *testing.T) {
+	t.Run("null", func(t *testing.T) {
+		atts, err := attestationsFromCorpusJSON(json.RawMessage("null"))
+		if err != nil {
+			t.Fatalf("attestationsFromCorpusJSON: %v", err)
+		}
+		if atts != nil {
+			t.Fatalf("got %q, want nil", atts)
+		}
+	})
+	t.Run("array", func(t *testing.T) {
+		atts, err := attestationsFromCorpusJSON(json.RawMessage(`[{"claim_id":"c1"},{"claim_id":"c2"}]`))
+		if err != nil {
+			t.Fatalf("attestationsFromCorpusJSON: %v", err)
+		}
+		want := "{\"claim_id\":\"c1\"}\n{\"claim_id\":\"c2\"}\n"
+		if string(atts) != want {
+			t.Fatalf("got %q, want %q", atts, want)
+		}
+		parsed, err := parseAttestations(atts)
+		if err != nil {
+			t.Fatalf("parseAttestations: %v", err)
+		}
+		if len(parsed) != 2 {
+			t.Fatalf("got %d attestations, want 2", len(parsed))
+		}
+	})
+	t.Run("object", func(t *testing.T) {
+		atts, err := attestationsFromCorpusJSON(json.RawMessage(`{"claim_id":"c1"}`))
+		if err != nil {
+			t.Fatalf("attestationsFromCorpusJSON: %v", err)
+		}
+		if _, err := parseAttestations(atts); err != nil {
+			t.Fatalf("parseAttestations: %v", err)
+		}
+	})
 }
