@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunNodeCanonicalizeWithFakeBinary(t *testing.T) {
@@ -150,5 +153,66 @@ func TestPickIntEmptySeed(t *testing.T) {
 func TestPickOptionalNestedEmpty(t *testing.T) {
 	if pickOptionalNested([]byte{1}, 5) != nil {
 		t.Fatal("expected nil")
+	}
+}
+
+func TestCompareInputAppliesConfigTimeout(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "node-canonicalize.mjs"), []byte("// stub"), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	slowNode := filepath.Join(dir, "node")
+	if err := os.WriteFile(slowNode, []byte("#!/bin/sh\nsleep 10"), 0o755); err != nil {
+		t.Fatalf("write slow node: %v", err)
+	}
+
+	nodeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(nodeDir, "package.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(nodeDir, "dist"), 0o755); err != nil {
+		t.Fatalf("mkdir dist: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(nodeDir, "dist", "signing.js"), []byte("//"), 0o644); err != nil {
+		t.Fatalf("write signing.js: %v", err)
+	}
+
+	pyRoot := t.TempDir()
+	pySrc := filepath.Join(pyRoot, "src", "intentproof")
+	if err := os.MkdirAll(pySrc, 0o755); err != nil {
+		t.Fatalf("mkdir py src: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pyRoot, "pyproject.toml"), []byte(""), 0o644); err != nil {
+		t.Fatalf("write pyproject.toml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pySrc, "signing.py"), []byte(""), 0o644); err != nil {
+		t.Fatalf("write signing.py: %v", err)
+	}
+
+	raw := json.RawMessage(`{"a":1}`)
+	cfg := Config{
+		Timeout:      50 * time.Millisecond,
+		NodeBinary:   slowNode,
+		ScriptsDir:   dir,
+		NodeSDKDir:   nodeDir,
+		PythonSDKDir: filepath.Join(pyRoot, "src"),
+		PythonCanonicalize: func(context.Context, json.RawMessage) ([]byte, error) {
+			return []byte(`{"a":1}`), nil
+		},
+	}
+
+	start := time.Now()
+	err := compareInput(context.Background(), cfg, raw)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("expected subprocess to abort quickly, took %v: %v", elapsed, err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) &&
+		!errors.Is(err, context.Canceled) &&
+		!strings.Contains(err.Error(), "killed") {
+		t.Fatalf("expected timeout-related error, got %v", err)
 	}
 }

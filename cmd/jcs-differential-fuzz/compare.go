@@ -137,6 +137,8 @@ func compareInput(ctx context.Context, cfg Config, input json.RawMessage) error 
 	if err != nil {
 		return err
 	}
+	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
+	defer cancel()
 
 	goOut, err := cfg.GoCanonicalize(input)
 	if err != nil {

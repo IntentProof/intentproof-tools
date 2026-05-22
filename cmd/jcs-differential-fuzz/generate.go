@@ -135,7 +135,10 @@ func generateJSONValue(seed []byte) any {
 		}
 		return 0
 	case 2:
-		return seed[1]%2 == 1
+		if len(seed) > 1 {
+			return seed[1]%2 == 1
+		}
+		return false
 	case 3:
 		return nil
 	case 4:

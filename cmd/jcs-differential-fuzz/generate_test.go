@@ -31,6 +31,13 @@ func TestBuildEventFromSeedMergesJSONObjectSeed(t *testing.T) {
 	}
 }
 
+func TestGenerateJSONValueSingleByteBoolBranch(t *testing.T) {
+	// seed[0] % 7 == 2 with len(seed) == 1 must not panic.
+	if got := generateJSONValue([]byte{2}); got != false {
+		t.Fatalf("expected false, got %v", got)
+	}
+}
+
 func TestGenerateJSONValueBranches(t *testing.T) {
 	cases := []struct {
 		seed []byte
