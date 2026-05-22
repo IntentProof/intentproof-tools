@@ -1,4 +1,7 @@
 # CodeQL finding allowlist with expiry model.
 # New entries require security on-call approval.
 # Expired entries fail CI via scripts/check-codeql-allowlist.sh.
-allowlist: []
+allowlist:
+  - rule_id: acceptance-probe/expired-entry
+    expires: 2020-01-01
+    reason: deliberate expired entry for Task 1.19 acceptance probe
