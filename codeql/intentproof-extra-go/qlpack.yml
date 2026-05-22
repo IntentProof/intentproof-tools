@@ -1,0 +1,6 @@
+name: intentproof/intentproof-extra-go
+version: 0.1.0
+description: IntentProof Go CodeQL rules (ADR-015 CI security gates)
+license: Apache-2.0
+dependencies:
+  codeql/go-all: "*"
