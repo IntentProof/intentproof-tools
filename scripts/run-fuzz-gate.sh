@@ -6,6 +6,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 SPEC_DIR="${INTENTPROOF_SPEC_DIR:-./intentproof-spec}"
+if [[ "$SPEC_DIR" != /* ]]; then
+  SPEC_DIR="$(cd "$ROOT" && cd "$SPEC_DIR" && pwd)"
+else
+  SPEC_DIR="$(cd "$SPEC_DIR" && pwd)"
+fi
 CORPUS_DIR="$SPEC_DIR/golden/fuzz-corpora/canon"
 if [[ ! -d "$CORPUS_DIR" ]]; then
   echo "fuzz corpus not found: $CORPUS_DIR" >&2

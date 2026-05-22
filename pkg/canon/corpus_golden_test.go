@@ -3,8 +3,11 @@ package canon
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -60,8 +63,16 @@ func assertMarshalRawIdempotent(t *testing.T, data []byte) {
 
 func specFuzzCorpusDir(t *testing.T) string {
 	t.Helper()
-	if dir := os.Getenv("INTENTPROOF_SPEC_DIR"); dir != "" {
-		corpus := filepath.Join(dir, "golden", "fuzz-corpora", "canon")
+	if env := os.Getenv("INTENTPROOF_SPEC_DIR"); env != "" {
+		specDir := env
+		if !filepath.IsAbs(specDir) {
+			modRoot, err := moduleRoot()
+			if err != nil {
+				t.Fatalf("resolve INTENTPROOF_SPEC_DIR: %v", err)
+			}
+			specDir = filepath.Join(modRoot, specDir)
+		}
+		corpus := filepath.Join(specDir, "golden", "fuzz-corpora", "canon")
 		if st, err := os.Stat(corpus); err == nil && st.IsDir() {
 			return corpus
 		}
@@ -80,4 +91,16 @@ func specFuzzCorpusDir(t *testing.T) string {
 	}
 	t.Skip("intentproof-spec golden/fuzz-corpora/canon not found; set INTENTPROOF_SPEC_DIR")
 	return ""
+}
+
+func moduleRoot() (string, error) {
+	out, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		return "", err
+	}
+	modPath := strings.TrimSpace(string(out))
+	if modPath == "" || modPath == "/dev/null" {
+		return "", fmt.Errorf("go env GOMOD: no module root")
+	}
+	return filepath.Dir(modPath), nil
 }

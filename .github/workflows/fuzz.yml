@@ -44,10 +44,15 @@ jobs:
           go-version-file: go.mod
 
       - name: Run fuzz gate
-        env:
-          INTENTPROOF_SPEC_DIR: ./intentproof-spec
-          FUZZ_TIME: ${{ github.event_name == 'schedule' && '30m' || (github.event_name == 'workflow_dispatch' && inputs.fuzz_time || '') }}
-        run: bash ./scripts/run-fuzz-gate.sh
+        run: |
+          SPEC_ABS="$(cd intentproof-spec && pwd)"
+          export INTENTPROOF_SPEC_DIR="$SPEC_ABS"
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            export FUZZ_TIME=30m
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            export FUZZ_TIME="${{ inputs.fuzz_time }}"
+          fi
+          bash ./scripts/run-fuzz-gate.sh
 
       - name: Upload fuzz corpus on failure
         if: failure()
