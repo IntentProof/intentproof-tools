@@ -25,12 +25,12 @@ jobs:
       release_ref: ${{ steps.release.outputs.release_ref }}
       release_version: ${{ steps.release.outputs.release_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref }}
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -52,7 +52,7 @@ jobs:
             echo "source_date_epoch=${source_date_epoch}"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         if: github.event_name != 'workflow_dispatch'
         with:
           distribution: goreleaser
@@ -62,7 +62,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_DATE_EPOCH: ${{ steps.release.outputs.source_date_epoch }}
 
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         if: github.event_name == 'workflow_dispatch'
         with:
           distribution: goreleaser
@@ -86,7 +86,7 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-binary-artifacts
           path: |
@@ -121,7 +121,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-signing-metadata
           path: release-signing-metadata

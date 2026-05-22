@@ -23,7 +23,7 @@ jobs:
       run:
         working-directory: intentproof-tools
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: intentproof-tools
 
@@ -38,7 +38,7 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Checkout intentproof-spec at pinned ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-spec
           ref: ${{ steps.spec_ref.outputs.ref }}
@@ -55,29 +55,29 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Checkout intentproof-core at pinned ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-core
           ref: ${{ steps.core_ref.outputs.ref }}
           path: intentproof-core
 
       - name: Checkout intentproof-sdk-node
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-sdk-node
           path: intentproof-sdk-node
 
       - name: Checkout intentproof-sdk-python
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-sdk-python
           path: intentproof-sdk-python
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: intentproof-tools/go.mod
           cache-dependency-path: |
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload fuzz corpus on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-crashes
           path: |
