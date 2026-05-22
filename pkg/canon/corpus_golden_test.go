@@ -37,7 +37,7 @@ func TestMarshalRawSpecCorpus(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read corpus file: %v", err)
 			}
-			assertMarshalRawIdempotent(t, data)
+			assertGoldenMarshalRawIdempotent(t, data)
 		})
 	}
 	if ran == 0 {
@@ -45,19 +45,24 @@ func TestMarshalRawSpecCorpus(t *testing.T) {
 	}
 }
 
-func assertMarshalRawIdempotent(t *testing.T, data []byte) {
+func assertGoldenMarshalRawIdempotent(t *testing.T, data []byte) {
 	t.Helper()
 	out, err := MarshalRaw(json.RawMessage(data))
 	if err != nil {
-		return
+		t.Fatalf("MarshalRaw golden corpus: %v\ninput: %s", err, string(data))
 	}
-	out2, err := MarshalRaw(out)
+	assertMarshalRawIdempotent(t, out)
+}
+
+func assertMarshalRawIdempotent(t *testing.T, canonical []byte) {
+	t.Helper()
+	out2, err := MarshalRaw(canonical)
 	if err != nil {
 		t.Fatalf("re-canonicalize succeeded output: %v", err)
 	}
-	if !bytes.Equal(out, out2) {
+	if !bytes.Equal(canonical, out2) {
 		t.Fatalf("canonical output is not idempotent:\n  first: %s\n second: %s",
-			string(out), string(out2))
+			string(canonical), string(out2))
 	}
 }
 
@@ -76,6 +81,7 @@ func specFuzzCorpusDir(t *testing.T) string {
 		if st, err := os.Stat(corpus); err == nil && st.IsDir() {
 			return corpus
 		}
+		t.Fatalf("INTENTPROOF_SPEC_DIR=%q but fuzz corpus not found at %s", env, corpus)
 	}
 	for _, candidate := range []string{
 		filepath.Join("..", "..", "intentproof-spec", "golden", "fuzz-corpora", "canon"),

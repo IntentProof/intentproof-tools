@@ -1,7 +1,6 @@
 package canon
 
 import (
-	"bytes"
 	"encoding/json"
 	"testing"
 )
@@ -41,13 +40,6 @@ func FuzzMarshalRaw(f *testing.F) {
 		if err != nil {
 			return
 		}
-		out2, err := MarshalRaw(out)
-		if err != nil {
-			t.Fatalf("re-canonicalize succeeded output: %v", err)
-		}
-		if !bytes.Equal(out, out2) {
-			t.Fatalf("canonical output is not idempotent:\n  first: %s\n second: %s",
-				string(out), string(out2))
-		}
+		assertMarshalRawIdempotent(t, out)
 	})
 }
