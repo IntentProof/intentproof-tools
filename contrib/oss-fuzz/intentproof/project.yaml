@@ -5,3 +5,7 @@ auto_ccs:
   - "security@intentproof.io"
 main_repo: "https://github.com/IntentProof/intentproof-tools.git"
 file_github_issue: true
+fuzzing_engines:
+  - libfuzzer
+sanitizers:
+  - address
