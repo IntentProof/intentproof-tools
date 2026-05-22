@@ -206,11 +206,7 @@ func runNodeCanonicalize(ctx context.Context, cfg Config, input json.RawMessage)
 
 func runPythonCanonicalize(ctx context.Context, cfg Config, input json.RawMessage) ([]byte, error) {
 	script := filepath.Join(cfg.ScriptsDir, "python-canonicalize.py")
-	pyRoot, err := pythonSDKSrcRoot(cfg.PythonSDKDir)
-	if err != nil {
-		return nil, err
-	}
-	cmd := exec.CommandContext(ctx, cfg.PythonBinary, script, pyRoot)
+	cmd := exec.CommandContext(ctx, cfg.PythonBinary, script, cfg.PythonSDKDir)
 	cmd.Stdin = bytes.NewReader(input)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
