@@ -53,13 +53,8 @@ func TestRunRefundRunJSONIndentFailure(t *testing.T) {
 }
 
 func TestRunRefundFlowIndentFailure(t *testing.T) {
-	calls := 0
-	withRefundHook(t, &refundJSONMarshalIndent, func(v any, prefix, indent string) ([]byte, error) {
-		calls++
-		if calls == 2 {
-			return nil, errors.New("flow indent")
-		}
-		return json.MarshalIndent(v, prefix, indent)
+	withRefundHook(t, &refundIndentJSON, func([]byte) ([]byte, error) {
+		return nil, errors.New("flow indent")
 	}, func() {
 		err := runRefundLateStage(t)
 		if err == nil || !strings.Contains(err.Error(), "flow indent") {
@@ -70,12 +65,12 @@ func TestRunRefundFlowIndentFailure(t *testing.T) {
 
 func TestRunRefundPolicyIndentFailure(t *testing.T) {
 	calls := 0
-	withRefundHook(t, &refundJSONMarshalIndent, func(v any, prefix, indent string) ([]byte, error) {
+	withRefundHook(t, &refundIndentJSON, func(raw []byte) ([]byte, error) {
 		calls++
-		if calls == 3 {
+		if calls == 2 {
 			return nil, errors.New("policy indent")
 		}
-		return json.MarshalIndent(v, prefix, indent)
+		return indentJSON(raw)
 	}, func() {
 		err := runRefundLateStage(t)
 		if err == nil || !strings.Contains(err.Error(), "policy indent") {
