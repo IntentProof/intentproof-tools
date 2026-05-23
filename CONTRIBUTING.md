@@ -37,8 +37,7 @@ Commits without `Signed-off-by:` will be rejected by CI.
 
 "IntentProof" and "Verified by IntentProof" are trademarks of
 IntentProof, Inc. Apache 2.0 grants you a copyright license; it does
-not grant you a trademark license. See `TRADEMARK.md` (forthcoming)
-for the certification-mark policy.
+not grant you a trademark license. See [`TRADEMARK.md`](TRADEMARK.md).
 
 ## Code style
 
