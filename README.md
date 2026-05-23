@@ -2,23 +2,8 @@
 
 [![CI](https://github.com/IntentProof/intentproof-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/IntentProof/intentproof-tools/actions/workflows/ci.yml)
 
-The Apache 2.0 "audit contract" surface of IntentProof: the offline
-verifier, developer CLI, policy compiler, bundle format, and crypto
-primitives that any customer, regulator, or competitor must be able
-to run forever without asking permission.
-
-This repository is the Tier 1 audit-contract surface of IntentProof.
-The Tier 1 / Tier 2 / Tier 3 split, the BSL-1.1-with-4-year-Apache
-conversion of `intentproof-core`, and the no-Tier-1-imports-Tier-2
-dependency invariant are normative for this repository:
-
-- Tier 1 code (this repo) is Apache 2.0 and must remain depend-
-  able by anyone, forever, without permission.
-- Tier 2 code (`intentproof-core`) is BSL 1.1 today and converts
-  to Apache 2.0 on a 4-year cadence.
-- Tier 1 packages here MUST NOT import any
-  `github.com/intentproof/intentproof-core/...` package. CI
-  enforces this; see `scripts/check-tier-isolation.sh`.
+Offline verifier, developer CLI, policy compiler, bundle format, and crypto
+primitives for IntentProof.
 
 ## Who uses this
 
@@ -26,7 +11,7 @@ Integrators, auditors, regulators, and self-hosters who need the offline
 verifier, developer CLI, policy compiler, and bundle format without
 depending on the hosted data plane.
 
-## What is in here
+## Scope
 
 | Path | Purpose |
 |------|---------|
@@ -38,14 +23,11 @@ depending on the hosted data plane.
 | `pkg/policy` | YAML → canonical-JSON policy compiler, fingerprinting, semantic diff. |
 | `pkg/crypto` | Policy signer / verifier abstractions, KMS + local-Ed25519 implementations. |
 | `pkg/openpgpkms` | OpenPGP public-key export and detached-signature helpers backed by AWS KMS RSA signing keys. |
-| `pkg/attestation` | Adapter SDK interface, canonicalization helpers, replay-key conventions. (First-party adapter *implementations* are Tier 2 and live in `intentproof-core`.) |
+| `pkg/attestation` | Adapter SDK interface, canonicalization helpers, replay-key conventions. |
 
-## What is NOT in here
-
-The operational data plane — ingest API, outbox publisher, flow
-builder, attestation gateway, query API, certificate issuer,
-subject-mapping sweeper, pull-source workers, DB migrations — lives
-in `intentproof-core` under BSL 1.1.
+Hosted data-plane services (ingest, query API, certificate issuer, and
+related workers) live in
+[`intentproof-core`](https://github.com/IntentProof/intentproof-core).
 
 ## Install
 
@@ -88,46 +70,30 @@ Report bugs and verifier regressions via
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). Security reports:
 [`SECURITY.md`](SECURITY.md).
 
-## Local filesystem state
+## Local loop
 
-`intentproof local` stores its laptop-only runtime state under
-`~/.intentproof/local`. That directory contains the local SQLite database
-(`local.db`) and embedded NATS state used by the local loop. Delete
-`~/.intentproof/local` to reset the local loop.
+`intentproof local` stores laptop-only runtime state under
+`~/.intentproof/local` (SQLite + embedded NATS). Delete that directory to
+reset the local loop.
 
-When present, `intentproof local` also imports the Node SDK public key from
-`~/.intentproof/sdk-node/keypair.json` so locally wrapped events can verify
-without extra setup. The local loop does not create that SDK keypair; the Node
-SDK creates it when an app calls `configure()` without an explicit `dataDir`.
+When present, `intentproof local` imports the Node SDK public key from
+`~/.intentproof/sdk-node/keypair.json` so locally wrapped events verify
+without extra setup.
 
-Tests and demos may override the home directory they use, so they do not need
-to touch the real `~/.intentproof` tree.
-
-The same local loop is also packaged as
-`ghcr.io/intentproof/intentproof-local`; see
+The same local loop ships as `ghcr.io/intentproof/intentproof-local`; see
 [`docs/intentproof-local-image.md`](docs/intentproof-local-image.md) for ports,
 volume mounts, image tags, and signature verification.
 
 ## Local development
 
-`intentproof-core` depends on this repository through a Go module
-replace directive (`replace github.com/intentproof/intentproof-tools
-=> ../intentproof-tools`) so the two repositories can be developed
-together as siblings under a single workspace directory. A root
-`go.work` file is the supported way to build them together:
+Develop alongside `intentproof-core` using sibling checkouts and a root
+`go.work` file:
 
 ```
 your-workspace/
 ├── go.work
-├── intentproof-tools/   # this repo (Apache 2.0)
-└── intentproof-core/    # BSL 1.1
-```
-
-Build & test everything:
-
-```
-go build ./...
-go test ./...
+├── intentproof-tools/
+└── intentproof-core/
 ```
 
 ## License
