@@ -1,9 +1,7 @@
 # Command Drift Guardrails
 
 This document captures behavior-level invariants that refactors should preserve
-for the Tier 1 (Apache 2.0) command surfaces in this repository. Companion doc
-for Tier 2 commands lives in
-[intentproof-core/docs/command-drift-guardrails.md](https://github.com/intentproof/intentproof-core/blob/main/docs/command-drift-guardrails.md).
+for verifier and developer CLI commands in this repository.
 
 ## cmd/intentproof
 
