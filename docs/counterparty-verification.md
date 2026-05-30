@@ -2,12 +2,9 @@
 
 Third parties — buyers, regulators, and auditors — can verify an IntentProof
 `.proof.tar.zst` bundle **without** an IntentProof account, API key, or trust
-in our UI. Verification uses the same pure-Go evaluator the platform ships.
+in a hosted UI. Verification uses the published `intentproof-verify` binary.
 
 Golden fixture: [`intentproof-spec/golden/counterparty/`](https://github.com/IntentProof/intentproof-spec/tree/main/golden/counterparty).
-
-Container image pre-pull verification is separate; see
-[`intentproof-infra/docs/pre-pull-verification.md`](https://github.com/IntentProof/intentproof-infra/blob/main/docs/pre-pull-verification.md).
 
 ---
 
@@ -47,8 +44,8 @@ intentproof verify ./acme-q1-refund.proof.tar.zst
 ```
 
 Exit code `0` means signatures and policy evaluation reproduced. Non-zero exit
-prints structured findings on stderr/stdout — the same semantics as the hosted
-platform.
+prints structured findings on stderr/stdout — the same semantics as CI and
+local verifier runs.
 
 ### Worked example (golden bundle)
 
@@ -119,18 +116,6 @@ the bundle manifest.
 Ask the sender which export profile they used if fields you expect are absent.
 
 ---
-
-## Operator metrics
-
-Hosted operators should track (dashboard implementation may follow separately):
-
-| Metric | Meaning |
-|--------|---------|
-| `bundles_exported_total{profile="counterparty"}` | Bundles shared externally |
-| `bundles_verified_external_total` | Distinct external re-verifications |
-
-Year-one success signal: procurement accepts the bundle without a follow-up
-workshop.
 
 Optional anonymous telemetry when counterparty runs verify may increment
 `bundles_verified_external_total` after privacy review — not required for

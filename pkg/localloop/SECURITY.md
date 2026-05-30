@@ -1,12 +1,11 @@
-# Local loop ingest security
+# Local loop security
 
-The local ingest HTTP server (`IngestServer`, default `:9787`) is intended for
-development on `127.0.0.1` only.
+`intentproof local` is a **developer-only** helper. It binds services to
+loopback, stores data under `~/.intentproof/local`, and is not a production
+deployment pattern.
 
-- It does **not** authenticate tenants with bearer tokens. Event authenticity
-  relies on Ed25519 signatures registered in the local SDK registry.
-- Do **not** bind the ingest port to `0.0.0.0` or expose it on an untrusted
-  network without a firewall. Any client that can reach the port may submit
-  events; only signature verification limits forgery for known SDK keys.
+Do not expose local ingest ports to untrusted networks. Delete
+`~/.intentproof/local` to reset state.
 
-For hosted ingest, use the core `ingest` service with bearer or mTLS auth.
+For production-style verification, use offline `intentproof-verify` on proof
+bundles — no running service required.
