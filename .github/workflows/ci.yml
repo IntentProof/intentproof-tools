@@ -126,8 +126,10 @@ jobs:
 
       - name: Prefer sibling PR branch for spec
         if: github.event_name == 'pull_request'
+        env:
+          PR_SIBLING_BRANCH: ${{ github.head_ref }}
         run: |
-          git -C intentproof-spec fetch origin "${{ github.head_ref }}" &&
+          git -C intentproof-spec fetch origin "$PR_SIBLING_BRANCH" &&
             git -C intentproof-spec checkout FETCH_HEAD || true
 
       - uses: actions/setup-node@v4
