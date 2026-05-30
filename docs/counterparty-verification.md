@@ -55,7 +55,7 @@ platform.
 ```bash
 git clone https://github.com/IntentProof/intentproof-spec.git
 cd intentproof-spec/golden/counterparty
-intentproof-verify counterparty.proof.tar.zst
+intentproof-verify counterparty-refund.proof.tar.zst
 ```
 
 Expected first line:
@@ -66,6 +66,19 @@ Expected first line:
 
 Works on macOS (amd64/arm64) and Linux (amd64/arm64) with the published
 `intentproof-verify` binary for your platform.
+
+### Explain and replay (v0.1)
+
+```bash
+intentproof-verify explain counterparty-refund.proof.tar.zst
+intentproof-verify replay counterparty-refund.proof.tar.zst > fresh-run.json
+```
+
+Set `INTENTPROOF_SPEC_DIR` to your `intentproof-spec` checkout so `explain`
+can load signed reason-catalog copy.
+
+Local smoke (current machine): from `intentproof-tools`, run
+`scripts/smoke-counterparty-verify.sh`.
 
 ---
 

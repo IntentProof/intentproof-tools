@@ -15,56 +15,20 @@ import (
 
 // Verify reads a bundle from the given reader and performs full verification.
 func Verify(r io.Reader, pubkey []byte) (*VerifyResult, error) {
-	tr, err := bundleTarReader(r)
+	b, err := Read(r)
 	if err != nil {
 		return nil, err
 	}
-	b := &Bundle{PublicKeys: map[string][]byte{}, RawFiles: map[string][]byte{}}
+	return verifyExtracted(b, pubkey)
+}
+
+// VerifyBundle runs structural verification on an extracted bundle.
+func VerifyBundle(b *Bundle, pubkey []byte) (*VerifyResult, error) {
+	return verifyExtracted(b, pubkey)
+}
+
+func verifyExtracted(b *Bundle, pubkey []byte) (*VerifyResult, error) {
 	findings := []string{}
-
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("bundle.tar_read_failed: %w", err)
-		}
-		buf := new(bytes.Buffer)
-		if _, err := io.Copy(buf, tr); err != nil {
-			return nil, fmt.Errorf("bundle.tar_extract_failed: %w", err)
-		}
-		body := buf.Bytes()
-		b.RawFiles[hdr.Name] = body
-
-		switch hdr.Name {
-		case "manifest.json":
-			var m Manifest
-			if err := json.Unmarshal(body, &m); err != nil {
-				return nil, fmt.Errorf("bundle.manifest_decode_failed: %w", err)
-			}
-			b.Manifest = &m
-		case "flow.json":
-			json.Unmarshal(body, &b.Flow)
-		case "events.jsonl":
-			b.Events = parseJSONL(body)
-		case "attestations.jsonl":
-			b.Attestations = parseJSONL(body)
-		case "policy.json":
-			json.Unmarshal(body, &b.Policy)
-		case "run.json":
-			json.Unmarshal(body, &b.Run)
-		case "certificate.json":
-			json.Unmarshal(body, &b.Certificate)
-		case "inclusion_proof.json":
-			json.Unmarshal(body, &b.InclusionProof)
-		default:
-			if strings.HasPrefix(hdr.Name, "keys/") && strings.HasSuffix(hdr.Name, ".pub") {
-				keyID := strings.TrimSuffix(strings.TrimPrefix(hdr.Name, "keys/"), ".pub")
-				b.PublicKeys[keyID] = body
-			}
-		}
-	}
 
 	if b.Manifest == nil {
 		return &VerifyResult{Status: "fail", Reason: "bundle.manifest_missing", Findings: findings}, nil
