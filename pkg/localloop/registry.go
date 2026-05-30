@@ -198,7 +198,7 @@ func BootstrapLocalRegistry(ctx context.Context, db *sql.DB, homeDir string) err
 }
 
 // SignExecutionEvent attaches an Ed25519 signature over the JCS canonical
-// body (signature field cleared), matching hosted ingest verification.
+// body (signature field cleared), matching ingest verification semantics.
 func SignExecutionEvent(ev ExecutionEvent, priv ed25519.PrivateKey) (ExecutionEvent, error) {
 	canonical, err := canonicalizeWithoutSignature(ev)
 	if err != nil {

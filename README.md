@@ -2,8 +2,7 @@
 
 [![CI](https://github.com/IntentProof/intentproof-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/IntentProof/intentproof-tools/actions/workflows/ci.yml)
 
-Offline verifier and developer CLI for IntentProof proof bundles. No account,
-no cloud ingest, no hosted service required.
+Offline verifier and developer CLI for IntentProof proof bundles.
 
 ## Commands
 

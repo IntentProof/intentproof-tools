@@ -5,7 +5,7 @@ and signature primitives for third-party attestation adapters.
 
 This package is part of the MIT-licensed verifier surface. Adapter
 implementations belong in separate repositories or your own codebase; they
-must not pull in retired hosted-service modules.
+must not depend on archived product repositories.
 
 ## Status
 
