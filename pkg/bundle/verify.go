@@ -70,6 +70,13 @@ func Verify(r io.Reader, pubkey []byte) (*VerifyResult, error) {
 		return &VerifyResult{Status: "fail", Reason: "bundle.manifest_missing", Findings: findings}, nil
 	}
 
+	if profRes, stop := validateVerificationProfile(b.Manifest, b); stop {
+		profRes.Findings = append(findings, profRes.Findings...)
+		return profRes, nil
+	} else if len(profRes.Findings) > 0 {
+		findings = append(findings, profRes.Findings...)
+	}
+
 	// 1. Verify manifest signature.
 	if b.Manifest.Signature != nil && len(pubkey) > 0 {
 		canonical, err := canonicalManifestJSON(b.Manifest)

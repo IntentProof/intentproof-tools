@@ -23,8 +23,14 @@ type CreateOptions struct {
 	CertificateJSON   []byte
 	InclusionProof    []byte
 	PublicKeys        map[string][]byte
-	CreatedAt         time.Time
-	Signer            func([]byte) (*SignatureEnvelope, error)
+	CreatedAt            time.Time
+	Signer               func([]byte) (*SignatureEnvelope, error)
+	VerificationProfile  *VerificationProfile
+	SpecVersion          string
+	VerifierVersion      string
+	ExportProfile        string
+	FlowSnapshotID       string
+	RunID                string
 }
 
 // Create builds a bundle and writes it to the given writer as a tar.zst stream.
@@ -80,6 +86,11 @@ func Create(w io.Writer, opts CreateOptions) error {
 		EventMerkle: eventMerkle,
 		AttMerkle:   attMerkle,
 	}
+	profile, err := deriveVerificationProfile(opts)
+	if err != nil {
+		return fmt.Errorf("verification profile: %w", err)
+	}
+	manifest.VerificationProfile = profile
 
 	if opts.Signer != nil {
 		canonical, err := canonicalManifestJSON(manifest)

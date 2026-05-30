@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/intentproof/intentproof-tools/pkg/bundle"
@@ -314,6 +315,8 @@ func RunRefund(ctx context.Context, opt Options) error {
 		RunJSON:           runJSON,
 		PublicKeys:        publicKeys,
 		CreatedAt:         opt.FixedTime,
+		SpecVersion:       strings.TrimSpace(os.Getenv("INTENTPROOF_SPEC_REF")),
+		ExportProfile:     "full",
 	})
 	_ = bf.Close()
 	if err != nil {

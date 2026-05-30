@@ -9,12 +9,8 @@ func TestVerifyPolicyJSONDecodeFailure(t *testing.T) {
 	opts := buildTestBundleOpts(t, nil)
 	opts.PolicyJSON = []byte(`{not json`)
 	var buf bytes.Buffer
-	if err := Create(&buf, opts); err != nil {
-		t.Fatal(err)
-	}
-	_, err := Verify(bytes.NewReader(buf.Bytes()), nil)
-	if err == nil {
-		t.Fatal("expected policy decode error")
+	if err := Create(&buf, opts); err == nil {
+		t.Fatal("expected create error for invalid policy json")
 	}
 }
 
