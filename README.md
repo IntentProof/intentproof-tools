@@ -48,7 +48,9 @@ go build ./...
 go test ./...
 ```
 
-CI runs tier-isolation checks, coverage gates, and conformance fixtures.
+CI runs tier-isolation checks, coverage gates, conformance fixtures, and
+cross-repo ecosystem pin checks (see
+[`intentproof-spec/compatibility/PINS.md`](https://github.com/IntentProof/intentproof-spec/blob/main/compatibility/PINS.md)).
 
 ## Release
 

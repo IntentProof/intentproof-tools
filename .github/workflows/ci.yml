@@ -106,6 +106,38 @@ jobs:
           INTENTPROOF_LOCAL_OPEN_BROWSER: "0"
         run: bash ./scripts/check-golden-demo-acceptance.sh
 
+  ecosystem-pins:
+    name: "IntentProof CI: Ecosystem Pins"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: IntentProof/intentproof-spec
+          ref: main
+          path: intentproof-spec
+
+      - uses: actions/checkout@v4
+        with:
+          repository: IntentProof/intentproof-core
+          ref: main
+          path: intentproof-core
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install spec dependencies for pin verifier
+        working-directory: intentproof-spec
+        run: npm ci
+
+      - name: Verify ecosystem pin alignment
+        env:
+          INTENTPROOF_TOOLS_DIR: ${{ github.workspace }}
+          INTENTPROOF_CORE_DIR: ${{ github.workspace }}/intentproof-core
+        run: bash intentproof-spec/scripts/check-ecosystem-pins.sh
+
   tier-isolation:
     name: "IntentProof CI: Tier Isolation"
     runs-on: ubuntu-latest
