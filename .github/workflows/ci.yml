@@ -30,6 +30,12 @@ jobs:
           ref: ${{ steps.spec_ref.outputs.ref }}
           path: intentproof-spec
 
+      - name: Prefer sibling PR branch for spec pins
+        if: github.event_name == 'pull_request'
+        run: |
+          git -C intentproof-spec fetch origin "${{ github.head_ref }}" 2>/dev/null || true
+          git -C intentproof-spec checkout FETCH_HEAD 2>/dev/null || true
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -100,6 +106,12 @@ jobs:
           ref: ${{ steps.spec_ref.outputs.ref }}
           path: intentproof-spec
 
+      - name: Prefer sibling PR branch for spec pins
+        if: github.event_name == 'pull_request'
+        run: |
+          git -C intentproof-spec fetch origin "${{ github.head_ref }}" 2>/dev/null || true
+          git -C intentproof-spec checkout FETCH_HEAD 2>/dev/null || true
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -134,6 +146,14 @@ jobs:
         run: |
           git -C intentproof-spec fetch origin "$PR_SIBLING_BRANCH" &&
             git -C intentproof-spec checkout FETCH_HEAD || true
+
+      - name: Prefer sibling PR branch for core
+        if: github.event_name == 'pull_request'
+        env:
+          PR_SIBLING_BRANCH: ${{ github.head_ref }}
+        run: |
+          git -C intentproof-core fetch origin "$PR_SIBLING_BRANCH" &&
+            git -C intentproof-core checkout FETCH_HEAD || true
 
       - uses: actions/setup-node@v4
         with:
