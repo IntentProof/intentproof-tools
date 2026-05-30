@@ -23,7 +23,8 @@ func TestRunDemoRefundSuccess(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(work, "demo-refund.proof.tar.zst")); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(stdout.Bytes(), []byte("Demo refund scenario finished")) {
+	if !bytes.Contains(stdout.Bytes(), []byte("loading scenario \"refund\"")) ||
+		!bytes.Contains(stdout.Bytes(), []byte("fail.required.missing")) {
 		t.Fatalf("stdout=%s", stdout.String())
 	}
 }

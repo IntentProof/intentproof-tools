@@ -14,6 +14,22 @@ import (
 	"time"
 )
 
+func TestRunRefundLoadScenarioError(t *testing.T) {
+	orig := refundLoadScenario
+	defer func() { refundLoadScenario = orig }()
+	refundLoadScenario = func() (RefundScenario, error) {
+		return RefundScenario{}, errors.New("fixtures unavailable")
+	}
+	err := RunRefund(context.Background(), Options{
+		Stdout: io.Discard, Stderr: io.Discard,
+		HomeDir: t.TempDir(), WorkDir: t.TempDir(),
+		PrivateKeySeed: deterministicRefundSeed(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "fixtures unavailable") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestRunRefundListenIngestFails(t *testing.T) {
 	orig := refundListenTCP
 	defer func() { refundListenTCP = orig }()
@@ -113,7 +129,7 @@ func TestRunRefundPostDivergentPathRejected(t *testing.T) {
 			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 				if req.Method == http.MethodPost {
 					n := posts.Add(1)
-					if n == 4 {
+					if n == 5 {
 						return &http.Response{
 							StatusCode: http.StatusInternalServerError,
 							Body:       io.NopCloser(strings.NewReader("ingest down")),

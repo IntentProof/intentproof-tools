@@ -6,7 +6,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"database/sql"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,14 +21,7 @@ import (
 	"github.com/intentproof/intentproof-tools/pkg/verifier"
 )
 
-//go:embed refund_policy.yaml
-var refundPolicyYAML []byte
-
-const (
-	corrRefundOK             = "corr_demo_refund_ok"
-	corrRefundMissingNotify  = "corr_demo_refund_missing_notify"
-	chainAnchorPrevEventHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-)
+const chainAnchorPrevEventHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 // refundListenTCP and refundNewHTTPClient are overridden in tests to exercise
 // RunRefund error paths without changing production defaults.
@@ -45,6 +37,9 @@ var (
 	refundRegisterSDK       = localloop.RegisterSDKInstance
 	refundStartNATS         = localloop.StartEmbeddedNATS
 	refundGenerateKey       = ed25519.GenerateKey
+	refundLoadScenario      = LoadRefundScenario
+	refundLoadReasonCopy    = LoadReasonCopy
+	refundPostStripeDemo    = replayStripeDemoForScenario
 	refundUserHomeDir       = os.UserHomeDir
 	refundJSONMarshal       = json.Marshal
 	refundJSONMarshalIndent = json.MarshalIndent
@@ -85,6 +80,12 @@ func RunRefund(ctx context.Context, opt Options) error {
 		opt.WorkDir = "."
 	}
 
+	scenario, err := refundLoadScenario()
+	if err != nil {
+		return fmt.Errorf("load golden demo fixtures: %w", err)
+	}
+	fmt.Fprintf(opt.Stdout, "✓ loading scenario \"refund\" from %s\n", scenario.Root)
+
 	dataDir := filepath.Join(opt.HomeDir, ".intentproof", "local")
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
@@ -114,6 +115,8 @@ func RunRefund(ctx context.Context, opt Options) error {
 	if err := refundRegisterSDK(regCtx, db, localloop.LocalTenantID, instanceID, priv.Public().(ed25519.PublicKey)); err != nil {
 		return fmt.Errorf("register sdk: %w", err)
 	}
+
+	attestStore := newAttestMemoryStore()
 
 	natsDir := filepath.Join(dataDir, "nats-demo")
 	nats, err := refundStartNATS(natsDir)
@@ -187,30 +190,42 @@ func RunRefund(ctx context.Context, opt Options) error {
 	}
 
 	baseTime := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
-	if err := postActionChain(client, ingestURL+"/v1/events", priv, instanceID, corrRefundOK, []string{
-		"payments.refund.execute",
-		"ledger.entry.write",
-		"customer.notify",
-	}, baseTime); err != nil {
+	if !opt.FixedTime.IsZero() {
+		baseTime = opt.FixedTime.UTC()
+	}
+	receivedAt := baseTime
+	if opt.FixedTime.IsZero() {
+		receivedAt = time.Now().UTC()
+	}
+	happy := scenario.HappyPath
+	divergent := scenario.DivergentPath
+	if err := postActionChain(client, ingestURL+"/v1/events", priv, instanceID, happy.CorrelationID, happy.Actions, baseTime); err != nil {
 		return fmt.Errorf("post happy path: %w", err)
 	}
-	if err := postActionChain(client, ingestURL+"/v1/events", priv, instanceID, corrRefundMissingNotify, []string{
-		"payments.refund.execute",
-		"ledger.entry.write",
-	}, baseTime.Add(2*time.Minute)); err != nil {
+	if happy.StripeDemo {
+		if err := refundPostStripeDemo(attestStore, priv, scenario, receivedAt); err != nil {
+			return fmt.Errorf("post happy path stripe@demo: %w", err)
+		}
+	}
+	if err := postActionChain(client, ingestURL+"/v1/events", priv, instanceID, divergent.CorrelationID, divergent.Actions, baseTime.Add(2*time.Minute)); err != nil {
 		return fmt.Errorf("post divergent path: %w", err)
+	}
+	if divergent.StripeDemo {
+		if err := refundPostStripeDemo(attestStore, priv, scenario, receivedAt); err != nil {
+			return fmt.Errorf("post divergent path stripe@demo: %w", err)
+		}
 	}
 
 	waitCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if err := waitForCorrelationFlow(waitCtx, db, corrRefundOK, 3); err != nil {
+	if err := waitForCorrelationFlow(waitCtx, db, happy.CorrelationID, len(happy.Actions)); err != nil {
 		return err
 	}
-	if err := waitForCorrelationFlow(waitCtx, db, corrRefundMissingNotify, 2); err != nil {
+	if err := waitForCorrelationFlow(waitCtx, db, divergent.CorrelationID, len(divergent.Actions)); err != nil {
 		return err
 	}
 
-	compiled, err := refundCompilePolicy(refundPolicyYAML)
+	compiled, err := refundCompilePolicy(scenario.PolicyYAML)
 	if err != nil {
 		return fmt.Errorf("compile policy: %w", err)
 	}
@@ -219,7 +234,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return fmt.Errorf("marshal policy: %w", err)
 	}
 
-	flowJSON, err := refundBuildFlowJSON(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
+	flowJSON, err := refundBuildFlowJSON(regCtx, db, localloop.LocalTenantID, divergent.CorrelationID)
 	if err != nil {
 		return fmt.Errorf("build flow json: %w", err)
 	}
@@ -238,11 +253,15 @@ func RunRefund(ctx context.Context, opt Options) error {
 	if vrun.Status != "fail" {
 		return fmt.Errorf("expected verification status fail on divergent path, got %s", vrun.Status)
 	}
-	if !hasReason(vrun, "fail.required.missing") {
-		return fmt.Errorf("expected finding reason fail.required.missing, got %+v", vrun.Findings)
+	wantReason := divergent.ExpectedReason
+	if wantReason == "" {
+		wantReason = "fail.required.missing"
+	}
+	if !hasReason(vrun, wantReason) {
+		return fmt.Errorf("expected finding reason %s, got %+v", wantReason, vrun.Findings)
 	}
 
-	okFlowJSON, err := refundBuildFlowJSON(regCtx, db, localloop.LocalTenantID, corrRefundOK)
+	okFlowJSON, err := refundBuildFlowJSON(regCtx, db, localloop.LocalTenantID, happy.CorrelationID)
 	if err != nil {
 		return fmt.Errorf("build ok flow json: %w", err)
 	}
@@ -259,11 +278,11 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return fmt.Errorf("marshal run: %w", err)
 	}
 
-	eventsJSONL, err := refundLoadEventsJSONL(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
+	eventsJSONL, err := refundLoadEventsJSONL(regCtx, db, localloop.LocalTenantID, divergent.CorrelationID)
 	if err != nil {
 		return fmt.Errorf("load events jsonl: %w", err)
 	}
-	publicKeys, err := refundLoadSDKPublicKeys(regCtx, db, localloop.LocalTenantID, corrRefundMissingNotify)
+	publicKeys, err := refundLoadSDKPublicKeys(regCtx, db, localloop.LocalTenantID, divergent.CorrelationID)
 	if err != nil {
 		return fmt.Errorf("load sdk public keys: %w", err)
 	}
@@ -277,6 +296,8 @@ func RunRefund(ctx context.Context, opt Options) error {
 		return fmt.Errorf("policy indent: %w", err)
 	}
 
+	attestationsJSONL := attestStore.attestationsJSONL()
+
 	bundlePath := filepath.Join(opt.WorkDir, "demo-refund.proof.tar.zst")
 	bf, err := os.Create(bundlePath)
 	if err != nil {
@@ -288,7 +309,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 		TenantID:          localloop.LocalTenantID,
 		FlowJSON:          flowPretty,
 		EventsJSONL:       eventsJSONL,
-		AttestationsJSONL: nil,
+		AttestationsJSONL: attestationsJSONL,
 		PolicyJSON:        policyPretty,
 		RunJSON:           runJSON,
 		PublicKeys:        publicKeys,
@@ -304,9 +325,25 @@ func RunRefund(ctx context.Context, opt Options) error {
 		absBundle = bundlePath
 	}
 
-	fmt.Fprintf(opt.Stdout, "Demo refund scenario finished.\n")
-	fmt.Fprintf(opt.Stdout, "- Happy-path correlation: %s (policy passes).\n", corrRefundOK)
-	fmt.Fprintf(opt.Stdout, "- Divergent correlation: %s (missing customer.notify).\n", corrRefundMissingNotify)
+	reasonCopy, err := refundLoadReasonCopy(wantReason)
+	if err != nil {
+		return fmt.Errorf("load reason catalog copy: %w", err)
+	}
+
+	fmt.Fprintf(opt.Stdout, "✓ replaying happy-path flow (%d events", len(happy.Actions))
+	if happy.StripeDemo {
+		fmt.Fprintf(opt.Stdout, ", stripe@demo attestation")
+	}
+	fmt.Fprintf(opt.Stdout, ")\n")
+	fmt.Fprintf(opt.Stdout, "✓ replaying divergent flow (%d events", len(divergent.Actions))
+	if divergent.StripeDemo {
+		fmt.Fprintf(opt.Stdout, ", stripe@demo attestation")
+	}
+	fmt.Fprintf(opt.Stdout, ")\n")
+	fmt.Fprintf(opt.Stdout, "✓ verifier produced 1 pass, 1 finding\n\n")
+	fmt.Fprint(opt.Stdout, FormatFindingCopy(reasonCopy))
+	fmt.Fprintf(opt.Stdout, "\n- Happy-path correlation: %s (policy passes).\n", happy.CorrelationID)
+	fmt.Fprintf(opt.Stdout, "- Divergent correlation: %s (%s).\n", divergent.CorrelationID, wantReason)
 	fmt.Fprintf(opt.Stdout, "- Exported bundle: %s\n", absBundle)
 	fmt.Fprintf(opt.Stdout, "  Re-verify: intentproof verify %s\n", absBundle)
 	fmt.Fprintf(opt.Stdout, "  Dashboard: %s/\n", dashboardURL)
@@ -322,6 +359,15 @@ func RunRefund(ctx context.Context, opt Options) error {
 		}
 	}
 	return nil
+}
+
+func replayStripeDemoForScenario(
+	store *attestMemoryStore,
+	platformKey ed25519.PrivateKey,
+	scenario RefundScenario,
+	receivedAt time.Time,
+) error {
+	return replayStripeDemoAttestationIntoStore(store, localloop.LocalTenantID, platformKey, scenario, receivedAt)
 }
 
 func waitHTTP(ctx context.Context, client *http.Client, urls []string) error {
