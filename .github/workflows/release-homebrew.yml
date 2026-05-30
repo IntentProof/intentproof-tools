@@ -18,7 +18,7 @@ jobs:
     name: "IntentProof Release: Bump Homebrew Tap"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Resolve release tag
         id: release
@@ -51,7 +51,7 @@ jobs:
           }
 
       - name: Checkout Homebrew tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: IntentProof/homebrew-tap
           token: ${{ secrets.INTENTPROOF_HOMEBREW_TAP_TOKEN }}
