@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -41,6 +42,8 @@ func TestBundleRoundTrip(t *testing.T) {
 		t.Fatalf("expected pass, got %s: %s", res.Status, res.Reason)
 	}
 	wantFindings := []string{
+		"verification_profile.present",
+		"verification_profile.verifier_version_supported",
 		"manifest.signature_valid",
 		"file_hash_valid:flow.json",
 		"file_hash_valid:events.jsonl",
@@ -623,6 +626,60 @@ func resignManifest(t *testing.T, b *Bundle, priv ed25519.PrivateKey) {
 		KeyID: "test",
 		Value: hex.EncodeToString(sig),
 	}
+}
+
+func writeTarManifest(t *testing.T, w io.Writer, manifestBody []byte) {
+	t.Helper()
+	tw := tar.NewWriter(w)
+	if err := tw.WriteHeader(&tar.Header{Name: "manifest.json", Size: int64(len(manifestBody)), Mode: 0o644}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(manifestBody); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func tamperManifestField(r io.Reader, edit func(*Manifest)) (io.Reader, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	tr, err := bundleTarReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	b := &Bundle{RawFiles: map[string][]byte{}, PublicKeys: map[string][]byte{}}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		body := make([]byte, hdr.Size)
+		if _, err := io.ReadFull(tr, body); err != nil {
+			return nil, err
+		}
+		b.RawFiles[hdr.Name] = body
+		if hdr.Name == "manifest.json" {
+			if err := json.Unmarshal(body, &b.Manifest); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if b.Manifest == nil {
+		return nil, fmt.Errorf("manifest missing")
+	}
+	edit(b.Manifest)
+	var out bytes.Buffer
+	if err := writeBundle(&out, b); err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(out.Bytes()), nil
 }
 
 func jsonOrEmpty(v map[string]interface{}) []byte {

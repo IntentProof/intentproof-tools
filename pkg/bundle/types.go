@@ -15,15 +15,16 @@ var (
 
 // Manifest is the canonical bundle manifest.
 type Manifest struct {
-	Schema      string             `json:"schema"`
-	BundleID    string             `json:"bundle_id"`
-	CreatedAt   string             `json:"created_at"`
-	FlowID      string             `json:"flow_id"`
-	TenantID    string             `json:"tenant_id"`
-	Files       []ManifestEntry    `json:"files"`
-	EventMerkle string             `json:"event_merkle_root"`
-	AttMerkle   string             `json:"attestation_merkle_root"`
-	Signature   *SignatureEnvelope `json:"signature,omitempty"`
+	Schema              string               `json:"schema"`
+	BundleID            string               `json:"bundle_id"`
+	CreatedAt           string               `json:"created_at"`
+	FlowID              string               `json:"flow_id"`
+	TenantID            string               `json:"tenant_id"`
+	Files               []ManifestEntry      `json:"files"`
+	EventMerkle         string               `json:"event_merkle_root"`
+	AttMerkle           string               `json:"attestation_merkle_root"`
+	VerificationProfile *VerificationProfile `json:"verification_profile,omitempty"`
+	Signature           *SignatureEnvelope   `json:"signature,omitempty"`
 }
 
 type ManifestEntry struct {

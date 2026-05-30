@@ -153,6 +153,10 @@ func TestVerifyPolicyJSONDecodeError(t *testing.T) {
 	manifest := Manifest{
 		Schema: "intentproof.bundle.manifest.v1", BundleID: "b1",
 		CreatedAt: "2026-05-12T00:00:00Z", FlowID: "f1", TenantID: "tnt",
+		VerificationProfile: &VerificationProfile{
+			SpecVersion: "v0.test", VerifierVersion: "dev", ExportProfile: "full",
+			FlowSnapshotID: "f1", RunID: "run_f1",
+		},
 		Files: []ManifestEntry{{Path: "policy.json", SHA: "sha256:" + sha256hex(policyBody)}},
 	}
 	mBody, err := json.Marshal(manifest)

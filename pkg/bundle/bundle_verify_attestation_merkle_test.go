@@ -64,7 +64,7 @@ func TestVerifyAttestationMerkleMismatch(t *testing.T) {
 }
 
 func TestVerifyManifestListedFileMissing(t *testing.T) {
-	body := []byte(`{"schema":"intentproof.bundle.manifest.v1","bundle_id":"b1","created_at":"2026-05-12T00:00:00Z","flow_id":"f1","tenant_id":"tnt","files":[{"path":"run.json","sha256":"sha256:00"}]}`)
+	body := []byte(`{"schema":"intentproof.bundle.manifest.v1","bundle_id":"b1","created_at":"2026-05-12T00:00:00Z","flow_id":"f1","tenant_id":"tnt","verification_profile":{"spec_version":"v0.test","verifier_version":"dev","policy_versions":[],"export_profile":"full","flow_snapshot_id":"f1","run_id":"run_f1"},"files":[{"path":"run.json","sha256":"sha256:00"}]}`)
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	_ = tw.WriteHeader(&tar.Header{Name: "manifest.json", Size: int64(len(body)), Mode: 0o644})
