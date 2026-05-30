@@ -12,4 +12,5 @@ fi
 SPEC_DIR_ABS="$(cd "$SPEC_DIR" && pwd)"
 
 INTENTPROOF_SPEC_DIR="$SPEC_DIR_ABS" \
-  go test ./pkg/policy -run TestPolicyCompilerMatchesSpecSchema -count=1
+INTENTPROOF_DETERMINISTIC_TIME=1 \
+  go test ./pkg/policy -run 'TestPolicyCompilerMatchesSpecSchema|TestReferencePolicyFixturesMatchVerifier' -count=1
