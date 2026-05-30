@@ -1,0 +1,320 @@
+name: release build sign
+
+on:
+  workflow_call:
+    inputs:
+      artifact_kind:
+        required: true
+        type: string
+      subject_name:
+        required: true
+        type: string
+      release_version:
+        required: true
+        type: string
+      release_ref:
+        required: true
+        type: string
+      artifact_paths:
+        required: false
+        type: string
+        default: ""
+      artifact_download_name:
+        required: false
+        type: string
+        default: ""
+      artifact_download_path:
+        required: false
+        type: string
+        default: "."
+      npm_package_path:
+        required: false
+        type: string
+        default: ""
+      pypi_dist_dir:
+        required: false
+        type: string
+        default: ""
+      pypi_package_path:
+        required: false
+        type: string
+        default: "."
+      sbom_extra_paths:
+        required: false
+        type: string
+        default: ""
+      attest_to_rekor:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      npm_token:
+        required: false
+      pypi_api_token:
+        required: false
+
+jobs:
+  validate:
+    name: "IntentProof Release: Validate Inputs"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate release signing inputs
+        env:
+          ARTIFACT_KIND: ${{ inputs.artifact_kind }}
+          ATTEST_TO_REKOR: ${{ inputs.attest_to_rekor }}
+          ARTIFACT_PATHS: ${{ inputs.artifact_paths }}
+          NPM_PACKAGE_PATH: ${{ inputs.npm_package_path }}
+          PYPI_DIST_DIR: ${{ inputs.pypi_dist_dir }}
+          RELEASE_REF: ${{ inputs.release_ref }}
+        run: |
+          set -euo pipefail
+
+          case "$ARTIFACT_KIND" in
+            binary|npm|pypi|generic) ;;
+            *)
+              echo "artifact_kind must be one of binary, npm, pypi, generic" >&2
+              exit 1
+              ;;
+          esac
+
+          semver_tag='^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          dry_run_ref='^(refs/heads/[0-9A-Za-z._/-]+|[0-9a-fA-F]{40})$'
+          if [[ "$ATTEST_TO_REKOR" == "true" ]]; then
+            if [[ ! "$RELEASE_REF" =~ $semver_tag ]]; then
+              echo "release_ref must be a SemVer tag ref like refs/tags/v1.2.3 when attest_to_rekor=true" >&2
+              exit 1
+            fi
+          elif [[ ! "$RELEASE_REF" =~ $semver_tag && ! "$RELEASE_REF" =~ $dry_run_ref ]]; then
+            echo "dry-run release_ref must be a SemVer tag, refs/heads/*, or a full commit SHA" >&2
+            exit 1
+          fi
+
+          case "$ARTIFACT_KIND" in
+            binary|generic)
+              test -n "$ARTIFACT_PATHS" || { echo "artifact_paths is required" >&2; exit 1; }
+              ;;
+            npm)
+              test -n "$NPM_PACKAGE_PATH" || { echo "npm_package_path is required" >&2; exit 1; }
+              ;;
+            pypi)
+              test -n "$PYPI_DIST_DIR" || { echo "pypi_dist_dir is required" >&2; exit 1; }
+              ;;
+          esac
+
+  binary-generic:
+    name: "IntentProof Release: Sign Binary or Generic Artifact"
+    needs: validate
+    if: inputs.artifact_kind == 'binary' || inputs.artifact_kind == 'generic'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_ref }}
+
+      - uses: actions/download-artifact@v8
+        if: inputs.artifact_download_name != ''
+        with:
+          name: ${{ inputs.artifact_download_name }}
+          path: ${{ inputs.artifact_download_path }}
+
+      - uses: sigstore/cosign-installer@v3
+
+      - uses: anchore/sbom-action/download-syft@v0
+
+      - name: Sign files and generate release metadata
+        env:
+          ARTIFACT_PATHS: ${{ inputs.artifact_paths }}
+          SBOM_EXTRA_PATHS: ${{ inputs.sbom_extra_paths }}
+          SUBJECT_NAME: ${{ inputs.subject_name }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          ATTEST_TO_REKOR: ${{ inputs.attest_to_rekor }}
+        run: |
+          set -euo pipefail
+          tlog_args=()
+          if [[ "$ATTEST_TO_REKOR" != "true" ]]; then
+            tlog_args+=(--tlog-upload=false)
+          fi
+
+          mkdir -p release-attestations
+          : > release-attestations/SHA256SUMS
+
+          while IFS= read -r artifact; do
+            [[ -z "$artifact" ]] && continue
+            test -f "$artifact" || { echo "artifact not found: $artifact" >&2; exit 1; }
+
+            (
+              cd "$(dirname "$artifact")"
+              sha256sum "$(basename "$artifact")"
+            ) >> release-attestations/SHA256SUMS
+            cosign sign-blob --yes \
+              "${tlog_args[@]}" \
+              --bundle "${artifact}.sigstore.json" \
+              --output-signature "${artifact}.sig" \
+              "$artifact"
+
+            syft packages "file:${artifact}" \
+              -o "spdx-json=${artifact}.spdx.json"
+
+            if [[ -n "$SBOM_EXTRA_PATHS" ]]; then
+              syft packages "$SBOM_EXTRA_PATHS" \
+                -o "spdx-json=${artifact}.source.spdx.json"
+            fi
+
+            cosign attest-blob --yes \
+              "${tlog_args[@]}" \
+              --type spdxjson \
+              --predicate "${artifact}.spdx.json" \
+              --bundle "${artifact}.sbom.sigstore.json" \
+              "$artifact"
+
+            artifact_sha="$(sha256sum "$artifact" | awk '{print $1}')"
+            ARTIFACT_PATH="$artifact" ARTIFACT_SHA="$artifact_sha" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          artifact_path = os.environ["ARTIFACT_PATH"]
+          run_id = os.environ["GITHUB_RUN_ID"]
+          predicate = {
+              "builder": {
+                  "id": (
+                      f"{os.environ['GITHUB_SERVER_URL']}/"
+                      f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/{run_id}"
+                  )
+              },
+              "buildType": "https://github.com/IntentProof/release-build-sign",
+              "invocation": {
+                  "parameters": {
+                      "releaseVersion": os.environ["RELEASE_VERSION"],
+                      "artifactPath": artifact_path,
+                      "subjectName": os.environ["SUBJECT_NAME"],
+                  }
+              },
+              "metadata": {
+                  "buildInvocationId": (
+                      f"{run_id}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+                  )
+              },
+              "materials": [
+                  {
+                      "uri": f"file:{artifact_path}",
+                      "digest": {"sha256": os.environ["ARTIFACT_SHA"]},
+                  }
+              ],
+          }
+          Path(f"{artifact_path}.intoto.jsonl").write_text(
+              json.dumps(predicate, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+            cosign attest-blob --yes \
+              "${tlog_args[@]}" \
+              --type slsaprovenance \
+              --predicate "${artifact}.intoto.jsonl" \
+              --bundle "${artifact}.intoto.sigstore.json" \
+              "$artifact"
+          done <<< "$ARTIFACT_PATHS"
+
+          cosign sign-blob --yes \
+            "${tlog_args[@]}" \
+            --bundle release-attestations/SHA256SUMS.sigstore.json \
+            --output-signature release-attestations/SHA256SUMS.sig \
+            release-attestations/SHA256SUMS
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-signing-metadata
+          path: |
+            **/*.sig
+            **/*.sigstore.json
+            **/*.spdx.json
+            **/*.intoto.jsonl
+            release-attestations/SHA256SUMS
+
+  npm:
+    name: "IntentProof Release: Pack and Publish npm Package"
+    needs: validate
+    if: inputs.artifact_kind == 'npm'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_ref }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Pack and publish with npm provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
+          NPM_PACKAGE_PATH: ${{ inputs.npm_package_path }}
+        run: |
+          set -euo pipefail
+          cd "$NPM_PACKAGE_PATH"
+          npm pack
+          if [[ -n "${NODE_AUTH_TOKEN:-}" ]]; then
+            npm publish --provenance
+          else
+            echo "npm_token not provided; packed artifact only."
+          fi
+
+  pypi:
+    name: "IntentProof Release: Build and Publish Python Distribution"
+    needs: validate
+    if: inputs.artifact_kind == 'pypi'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PYPI_API_TOKEN: ${{ secrets.pypi_api_token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_ref }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v8
+        if: inputs.artifact_download_name != ''
+        with:
+          name: ${{ inputs.artifact_download_name }}
+          path: ${{ inputs.pypi_dist_dir }}
+
+      - name: Build and check Python distributions
+        env:
+          ARTIFACT_DOWNLOAD_NAME: ${{ inputs.artifact_download_name }}
+          PYPI_PACKAGE_PATH: ${{ inputs.pypi_package_path }}
+          PYPI_DIST_DIR: ${{ inputs.pypi_dist_dir }}
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build twine
+          if [[ -z "$ARTIFACT_DOWNLOAD_NAME" ]]; then
+            rm -rf "$PYPI_DIST_DIR"
+            python -m build --outdir "$PYPI_DIST_DIR" "$PYPI_PACKAGE_PATH"
+          fi
+          test -d "$PYPI_DIST_DIR"
+          twine check "$PYPI_DIST_DIR"/*
+          echo "PyPI trusted publishing is expected to attach PEP 740 attestations."
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        if: env.PYPI_API_TOKEN == ''
+        with:
+          packages-dir: ${{ inputs.pypi_dist_dir }}
+          attestations: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        if: env.PYPI_API_TOKEN != ''
+        with:
+          packages-dir: ${{ inputs.pypi_dist_dir }}
+          password: ${{ secrets.pypi_api_token }}
+          attestations: true
