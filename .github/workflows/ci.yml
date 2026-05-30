@@ -11,7 +11,7 @@ jobs:
     name: "IntentProof CI: Build and Test"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Read pinned spec ref
         id: spec_ref
@@ -24,13 +24,13 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Checkout intentproof-spec at pinned ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-spec
           ref: ${{ steps.spec_ref.outputs.ref }}
           path: intentproof-spec
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
