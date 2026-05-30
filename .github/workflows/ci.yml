@@ -11,7 +11,7 @@ jobs:
     name: "IntentProof CI: Build and Test"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Read pinned spec ref
         id: spec_ref
@@ -24,7 +24,7 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Checkout intentproof-spec at pinned ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-spec
           ref: ${{ steps.spec_ref.outputs.ref }}
@@ -35,7 +35,7 @@ jobs:
           PR_SIBLING_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
         run: bash ./scripts/sync-spec-pins-manifest.sh intentproof-spec
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -55,7 +55,7 @@ jobs:
         run: bash ./scripts/check-coverage.sh coverage.out
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage.out
           path: coverage.out
@@ -86,7 +86,7 @@ jobs:
           - runner: macos-latest
             os_label: darwin-arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Read pinned spec ref
         id: spec_ref
@@ -99,13 +99,13 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Checkout intentproof-spec at pinned ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-spec
           ref: ${{ steps.spec_ref.outputs.ref }}
           path: intentproof-spec
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -118,15 +118,15 @@ jobs:
     name: "IntentProof CI: Ecosystem Pins"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-spec
           ref: main
           path: intentproof-spec
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: IntentProof/intentproof-core
           ref: main
@@ -148,7 +148,7 @@ jobs:
           git -C intentproof-core fetch origin "$PR_SIBLING_BRANCH" &&
             git -C intentproof-core checkout FETCH_HEAD || true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -166,7 +166,7 @@ jobs:
     name: "IntentProof CI: Tier Isolation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Tier dependency invariant
         run: ./scripts/check-tier-isolation.sh
@@ -175,9 +175,9 @@ jobs:
     name: "IntentProof CI: Package Signing Compatibility"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
