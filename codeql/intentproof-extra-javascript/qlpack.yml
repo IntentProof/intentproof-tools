@@ -1,6 +1,0 @@
-name: intentproof/intentproof-extra-javascript
-version: 0.1.0
-description: IntentProof JavaScript CodeQL rules (ADR-015 CI security gates)
-license: Apache-2.0
-dependencies:
-  codeql/javascript-all: "*"
