@@ -58,6 +58,12 @@ Maintainer releases use Sigstore keyless signing via
 [`.github/workflows/release-build-sign.yml`](.github/workflows/release-build-sign.yml).
 See [`docs/release-signing.md`](docs/release-signing.md).
 
+After a release that changes cross-repo compatibility, open a spec follow-up PR
+using
+[`intentproof-spec/compatibility/compatibility-tuple-follow-up.md`](https://github.com/IntentProof/intentproof-spec/blob/main/compatibility/compatibility-tuple-follow-up.md)
+(Path B when every component in the tuple has a GitHub Release; otherwise Path A
+in [`compatibility/README.md`](https://github.com/IntentProof/intentproof-spec/blob/main/compatibility/README.md)).
+
 ## Documentation hub
 
 Per-repo README files plus
