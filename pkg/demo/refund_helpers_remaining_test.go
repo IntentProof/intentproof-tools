@@ -108,9 +108,11 @@ func TestRunRefundPrintsCompletionSummary(t *testing.T) {
 	}
 	out := stdout.String()
 	for _, want := range []string{
-		"Demo refund scenario finished",
-		corrRefundOK,
-		corrRefundMissingNotify,
+		"loading scenario \"refund\"",
+		"corr_demo_refund_ok",
+		"corr_demo_refund_missing_notify",
+		"fail.required.missing",
+		"Required step was skipped",
 		"demo-refund.proof.tar.zst",
 	} {
 		if !strings.Contains(out, want) {

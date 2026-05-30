@@ -122,6 +122,13 @@ func deterministicRefundSeed() []byte {
 
 func readExpectedBundleHash(t *testing.T) string {
 	t.Helper()
+	if path, err := ExpectedBundleHashPath(); err == nil {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(string(raw))
+	}
 	raw, err := os.ReadFile(filepath.Join("testdata", "refund", "expected-bundle-sha256.txt"))
 	if err != nil {
 		t.Fatal(err)

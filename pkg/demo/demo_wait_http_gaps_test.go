@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,11 +66,43 @@ func TestRunRefundOpenDBError(t *testing.T) {
 	}
 }
 
+func TestWaitHTTPInvalidURL(t *testing.T) {
+	err := waitHTTP(context.Background(), http.DefaultClient, []string{"://bad"})
+	if err == nil {
+		t.Fatal("expected request error")
+	}
+}
+
 func TestPostActionChainConnectionRefused(t *testing.T) {
 	priv := ed25519.NewKeyFromSeed(deterministicRefundSeed())
 	err := postActionChain(http.DefaultClient, "http://127.0.0.1:1/v1/events", priv, "inst", "corr",
 		[]string{"payments.refund.execute"}, time.Now())
 	if err == nil {
 		t.Fatal("expected post error")
+	}
+}
+
+func TestPostActionChainBadStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	priv := ed25519.NewKeyFromSeed(deterministicRefundSeed())
+	err := postActionChain(http.DefaultClient, srv.URL, priv, "inst", "corr",
+		[]string{"ledger.entry.write"}, time.Now())
+	if err == nil || !strings.Contains(err.Error(), "status 400") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestPostActionChainSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+	priv := ed25519.NewKeyFromSeed(deterministicRefundSeed())
+	actions := []string{"payments.refund.execute", "ledger.entry.write", "customer.notify"}
+	if err := postActionChain(http.DefaultClient, srv.URL, priv, "inst", "corr", actions, time.Now()); err != nil {
+		t.Fatal(err)
 	}
 }
