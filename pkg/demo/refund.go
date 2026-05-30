@@ -345,7 +345,7 @@ func RunRefund(ctx context.Context, opt Options) error {
 	fmt.Fprintf(opt.Stdout, "\n- Happy-path correlation: %s (policy passes).\n", happy.CorrelationID)
 	fmt.Fprintf(opt.Stdout, "- Divergent correlation: %s (%s).\n", divergent.CorrelationID, wantReason)
 	fmt.Fprintf(opt.Stdout, "- Exported bundle: %s\n", absBundle)
-	fmt.Fprintf(opt.Stdout, "  Re-verify: intentproof verify %s\n", absBundle)
+	fmt.Fprintf(opt.Stdout, "  Re-verify: intentproof verify %s\n", verifyCommandForBundle(opt.WorkDir, bundlePath))
 	fmt.Fprintf(opt.Stdout, "  Dashboard: %s/\n", dashboardURL)
 
 	if opt.OpenBrowser {
@@ -499,4 +499,32 @@ func hasReason(vrun *verifier.VerificationRun, code string) bool {
 		}
 	}
 	return false
+}
+
+// verifyCommandForBundle returns a copy-paste verify path for onboarding output.
+func verifyCommandForBundle(workDir, bundlePath string) string {
+	const defaultName = "demo-refund.proof.tar.zst"
+	if filepath.Base(bundlePath) != defaultName {
+		abs, err := filepath.Abs(bundlePath)
+		if err != nil {
+			return bundlePath
+		}
+		return abs
+	}
+	workAbs, err := filepath.Abs(workDir)
+	if err != nil {
+		abs, err := filepath.Abs(bundlePath)
+		if err != nil {
+			return bundlePath
+		}
+		return abs
+	}
+	bundleAbs, err := filepath.Abs(bundlePath)
+	if err != nil {
+		return bundlePath
+	}
+	if filepath.Dir(bundleAbs) == workAbs {
+		return "./" + defaultName
+	}
+	return bundleAbs
 }
