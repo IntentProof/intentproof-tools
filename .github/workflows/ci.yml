@@ -64,6 +64,48 @@ jobs:
       - name: Verify counterparty golden bundle stdout
         run: bash ./scripts/check-counterparty-golden.sh
 
+  golden-demo-acceptance:
+    name: "IntentProof CI: Golden Demo Acceptance (${{ matrix.os_label }})"
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os_label: linux-amd64
+          - runner: ubuntu-24.04-arm
+            os_label: linux-arm64
+          - runner: macos-latest
+            os_label: darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned spec ref
+        id: spec_ref
+        run: |
+          ref=$(cat SPEC_REF)
+          if ! echo "$ref" | grep -qE '^[0-9a-fA-F]{40}$'; then
+            echo "Invalid SPEC_REF: must be a full 40-character hex SHA, got '$ref'" >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout intentproof-spec at pinned ref
+        uses: actions/checkout@v4
+        with:
+          repository: IntentProof/intentproof-spec
+          ref: ${{ steps.spec_ref.outputs.ref }}
+          path: intentproof-spec
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Golden demo refund acceptance
+        env:
+          INTENTPROOF_LOCAL_OPEN_BROWSER: "0"
+        run: bash ./scripts/check-golden-demo-acceptance.sh
+
   tier-isolation:
     name: "IntentProof CI: Tier Isolation"
     runs-on: ubuntu-latest
