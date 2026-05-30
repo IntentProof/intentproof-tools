@@ -1,8 +1,7 @@
 # Offline refund verification (under 10 minutes)
 
-No IntentProof account, no cloud ingest, no dashboard. You need Go (to build
-from source) or a release `intentproof-verify` binary, plus this repo's spec
-checkout for the golden bundle.
+You need Go (to build from source) or a release `intentproof-verify` binary,
+plus this repo's spec checkout for the golden bundle.
 
 Contract reference: [`v0.1-local-contract.md`](v0.1-local-contract.md).
 

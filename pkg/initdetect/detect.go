@@ -261,12 +261,12 @@ func FormatStripeRefundTemplate(p Project) string {
 	steps := []string{
 		"Wrap the refund call (payments.refund.execute)",
 		"Confirm correlation ID propagation (traceparent or run_with_correlation_id)",
-		"Connect Stripe webhook (stripe listen or hosted tunnel)",
+		"Connect Stripe webhook (stripe listen --forward-to ingest)",
 		"Verify webhook HMAC with: intentproof sources test <source_id>",
 		"Activate preset: reference.payments.refund-with-notification.v1",
 		"Run a test refund in Stripe test mode",
 		"Trigger a deliberate divergence (see wedge MVP failure modes)",
-		"Open the finding in the dashboard or: intentproof findings show <id>",
+		"Inspect the finding: intentproof findings show <id>",
 		"Export proof bundle: intentproof bundle export <run_id>",
 	}
 	for i, step := range steps {
@@ -274,6 +274,6 @@ func FormatStripeRefundTemplate(p Project) string {
 	}
 	b.WriteString("\n")
 	b.WriteString("Note: end-to-end Path 3 against a live Stripe test account ships when\n")
-	b.WriteString("hosted reconciliation gates close. Use intentproof demo refund today.\n")
+	b.WriteString("reconciliation adapters ship. Use intentproof demo refund today.\n")
 	return b.String()
 }

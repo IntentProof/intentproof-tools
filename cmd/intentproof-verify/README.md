@@ -1,7 +1,8 @@
 # intentproof-verify
 
-Pure-Go offline verifier for IntentProof `.proof.tar.zst` bundles. No network,
-no account, no SQLite — suitable for counterparty and auditor machines.
+Pure-Go verifier for IntentProof `.proof.tar.zst` bundles. Verification needs
+no network, database, or runtime services — suitable for counterparty and
+auditor machines.
 
 ## Usage
 

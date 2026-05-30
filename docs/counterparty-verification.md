@@ -1,8 +1,7 @@
 # Counterparty and auditor verification
 
 Third parties — buyers, regulators, and auditors — can verify an IntentProof
-`.proof.tar.zst` bundle **without** an IntentProof account, API key, or trust
-in a hosted UI. Verification uses the published `intentproof-verify` binary.
+`.proof.tar.zst` bundle with the published `intentproof-verify` binary only.
 
 Golden fixture: [`intentproof-spec/golden/counterparty/`](https://github.com/IntentProof/intentproof-spec/tree/main/golden/counterparty).
 
@@ -10,7 +9,7 @@ Golden fixture: [`intentproof-spec/golden/counterparty/`](https://github.com/Int
 
 ## 1. Install the verifier only
 
-Pick one channel (no account required after download):
+Pick one install channel:
 
 ```bash
 # macOS (Cosign-verified Homebrew formula)

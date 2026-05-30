@@ -120,7 +120,7 @@ func checkSDKConfig() []Check {
 				Name:   "ingest auth",
 				Status: StatusWarn,
 				Detail: "INTENTPROOF_INGEST_TOKEN unset",
-				Hint:   "hosted ingest usually requires a tenant ingest token",
+				Hint:   "set INTENTPROOF_INGEST_TOKEN when ingest requires bearer auth",
 			})
 		}
 	} else {

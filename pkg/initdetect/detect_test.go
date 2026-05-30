@@ -111,7 +111,7 @@ func TestStripeRefundTemplateIsPreviewOutline(t *testing.T) {
 		"Stripe Refund Proof",
 		"Path 3 wedge steps",
 		"Wrap the refund call",
-		"hosted reconciliation gates close",
+		"reconciliation adapters ship",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)

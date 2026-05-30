@@ -22,15 +22,15 @@ func FormatStripeRefundAgentMarkdown(p Project) string {
 	b.WriteString("Follow steps in order.\n\n")
 	writeAgentMarkdownBody(&b, p)
 	b.WriteString("\n## Path 3 wedge steps (preview)\n\n")
-	b.WriteString("Complete these when hosted reconciliation adapters are live. ")
-	b.WriteString("Until then, run `intentproof demo refund` for an offline reference flow.\n\n")
+	b.WriteString("Complete these when reconciliation adapters are available. ")
+	b.WriteString("Until then, run `intentproof demo refund` for the reference flow.\n\n")
 	steps := []struct {
 		desc string
 		cmd  string
 	}{
 		{"Wrap the refund call", "payments.refund.execute"},
 		{"Propagate correlation IDs", "use W3C traceparent or run_with_correlation_id"},
-		{"Connect Stripe webhook", "stripe listen --forward-to <ingest-url> (or hosted tunnel)"},
+		{"Connect Stripe webhook", "stripe listen --forward-to <ingest-url>"},
 		{"Verify webhook HMAC", "intentproof sources test <source_id>"},
 		{"Activate preset policy", "reference.payments.refund-with-notification.v1"},
 		{"Run a Stripe test refund", "(Stripe test mode)"},
