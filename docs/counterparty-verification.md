@@ -140,5 +140,7 @@ offline verification.
 
 ## Related material
 
+- [`docs/v0.1-local-contract.md`](v0.1-local-contract.md)
+- [`docs/offline-refund-verify.md`](offline-refund-verify.md)
 - [`cmd/intentproof-verify/README.md`](../cmd/intentproof-verify/README.md)
 - Golden bundle CI: `intentproof-spec/scripts/check-counterparty-golden.sh`
