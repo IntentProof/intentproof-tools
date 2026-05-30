@@ -102,11 +102,7 @@ func TestStripeReplayDuplicate(t *testing.T) {
 }
 
 func TestSpecRootFromEnvAbsolute(t *testing.T) {
-	spec := filepath.Join("..", "..", "..", "intentproof-spec")
-	abs, err := filepath.Abs(spec)
-	if err != nil {
-		t.Fatal(err)
-	}
+	abs := absoluteSpecDirWithGoldenDemo(t)
 	root, err := specRootFromEnv(abs)
 	if err != nil {
 		t.Fatal(err)
@@ -117,11 +113,7 @@ func TestSpecRootFromEnvAbsolute(t *testing.T) {
 }
 
 func TestGoldenDemoRootFromEnvFunction(t *testing.T) {
-	spec := filepath.Join("..", "..", "..", "intentproof-spec")
-	abs, err := filepath.Abs(spec)
-	if err != nil {
-		t.Fatal(err)
-	}
+	abs := absoluteSpecDirWithGoldenDemo(t)
 	root, err := goldenDemoRootFromEnv(abs)
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +121,29 @@ func TestGoldenDemoRootFromEnvFunction(t *testing.T) {
 	if !strings.Contains(root, "golden/demo") {
 		t.Fatalf("root=%q", root)
 	}
+}
+
+func absoluteSpecDirWithGoldenDemo(t *testing.T) string {
+	t.Helper()
+	modRoot, err := moduleRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range []string{
+		filepath.Join(modRoot, "intentproof-spec"),
+		filepath.Join(modRoot, "..", "intentproof-spec"),
+	} {
+		abs, err := filepath.Abs(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		demoRoot := filepath.Join(abs, "golden", "demo")
+		if st, err := os.Stat(demoRoot); err == nil && st.IsDir() {
+			return abs
+		}
+	}
+	t.Skip("intentproof-spec/golden/demo not found for absolute env test")
+	return ""
 }
 
 func TestSpecRootMonorepoFallback(t *testing.T) {
