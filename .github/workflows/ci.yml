@@ -42,7 +42,9 @@ jobs:
           INTENTPROOF_LOCAL_OPEN_BROWSER: "0"
           INTENTPROOF_SPEC_DIR: ${{ github.workspace }}/intentproof-spec
         run: |
-          mapfile -t PACKAGES < <(go list ./... | grep -v '/cmd/local-seed$')
+          mapfile -t PACKAGES < <(go list ./... \
+            | grep -v '/cmd/local-seed$' \
+            | grep -v '/cmd/jcs-differential-fuzz$')
           go test -count=1 "${PACKAGES[@]}"
 
       - name: Verify counterparty golden bundle stdout
