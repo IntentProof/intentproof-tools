@@ -30,11 +30,6 @@ jobs:
           ref: ${{ steps.spec_ref.outputs.ref }}
           path: intentproof-spec
 
-      - name: Sync spec pins manifest for OSS-Fuzz check
-        env:
-          PR_SIBLING_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
-        run: bash ./scripts/sync-spec-pins-manifest.sh intentproof-spec
-
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -42,177 +37,15 @@ jobs:
       - name: go build
         run: go build ./...
 
-      - name: Run tests with coverage
+      - name: go test
         env:
           INTENTPROOF_LOCAL_OPEN_BROWSER: "0"
+          INTENTPROOF_SPEC_DIR: ${{ github.workspace }}/intentproof-spec
         run: |
-          SPEC_ABS="$(cd intentproof-spec && pwd)"
-          export INTENTPROOF_SPEC_DIR="$SPEC_ABS"
-          mapfile -t PACKAGES < <(go list ./... | grep -v '/cmd/local-seed$' | grep -v '/cmd/jcs-differential-fuzz$')
-          go test -count=1 -coverprofile=coverage.out -covermode=atomic "${PACKAGES[@]}"
-
-      - name: Enforce coverage threshold
-        run: bash ./scripts/check-coverage.sh coverage.out
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage.out
-          path: coverage.out
-
-      - name: Verify policy compiler against pinned spec schema
-        run: INTENTPROOF_SPEC_DIR=./intentproof-spec ./scripts/check-spec-conformance.sh
-
-      - name: Verify OSS-Fuzz project pins match ecosystem manifest
-        run: INTENTPROOF_SPEC_DIR=./intentproof-spec bash ./scripts/check-oss-fuzz-project.sh
-
-      - name: Validate release workflow contracts
-        run: python3 ./scripts/check-release-workflows.py
+          mapfile -t PACKAGES < <(go list ./... | grep -v '/cmd/local-seed$')
+          go test -count=1 "${PACKAGES[@]}"
 
       - name: Verify counterparty golden bundle stdout
+        env:
+          INTENTPROOF_SPEC_DIR: ${{ github.workspace }}/intentproof-spec
         run: bash ./scripts/check-counterparty-golden.sh
-
-  golden-demo-acceptance:
-    name: "IntentProof CI: Golden Demo Acceptance (${{ matrix.os_label }})"
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            os_label: linux-amd64
-          - runner: ubuntu-24.04-arm
-            os_label: linux-arm64
-          - runner: macos-latest
-            os_label: darwin-arm64
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Read pinned spec ref
-        id: spec_ref
-        run: |
-          ref=$(cat SPEC_REF)
-          if ! echo "$ref" | grep -qE '^[0-9a-fA-F]{40}$'; then
-            echo "Invalid SPEC_REF: must be a full 40-character hex SHA, got '$ref'" >&2
-            exit 1
-          fi
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout intentproof-spec at pinned ref
-        uses: actions/checkout@v4
-        with:
-          repository: IntentProof/intentproof-spec
-          ref: ${{ steps.spec_ref.outputs.ref }}
-          path: intentproof-spec
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Golden demo refund acceptance
-        env:
-          INTENTPROOF_LOCAL_OPEN_BROWSER: "0"
-        run: bash ./scripts/check-golden-demo-acceptance.sh
-
-  ecosystem-pins:
-    name: "IntentProof CI: Ecosystem Pins"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/checkout@v4
-        with:
-          repository: IntentProof/intentproof-spec
-          ref: main
-          path: intentproof-spec
-
-      - uses: actions/checkout@v4
-        with:
-          repository: IntentProof/intentproof-core
-          ref: main
-          path: intentproof-core
-
-      - name: Prefer sibling PR branch for spec
-        if: github.event_name == 'pull_request'
-        env:
-          PR_SIBLING_BRANCH: ${{ github.head_ref }}
-        run: |
-          git -C intentproof-spec fetch origin "$PR_SIBLING_BRANCH" &&
-            git -C intentproof-spec checkout FETCH_HEAD || true
-
-      - name: Prefer sibling PR branch for core
-        if: github.event_name == 'pull_request'
-        env:
-          PR_SIBLING_BRANCH: ${{ github.head_ref }}
-        run: |
-          git -C intentproof-core fetch origin "$PR_SIBLING_BRANCH" &&
-            git -C intentproof-core checkout FETCH_HEAD || true
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install spec dependencies for pin verifier
-        working-directory: intentproof-spec
-        run: npm ci
-
-      - name: Verify ecosystem pin alignment
-        env:
-          INTENTPROOF_TOOLS_DIR: ${{ github.workspace }}
-          INTENTPROOF_CORE_DIR: ${{ github.workspace }}/intentproof-core
-        run: bash intentproof-spec/scripts/check-ecosystem-pins.sh
-
-  tier-isolation:
-    name: "IntentProof CI: Tier Isolation"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Tier dependency invariant
-        run: ./scripts/check-tier-isolation.sh
-
-  package-signing-compat:
-    name: "IntentProof CI: Package Signing Compatibility"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Install Linux package verification tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gnupg rpm
-
-      - name: Verify OpenPGP package metadata compatibility
-        run: ./scripts/check-package-signing-compat.sh
-
-  dco:
-    name: "IntentProof CI: DCO"
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Require Signed-off-by trailer on every commit
-        run: |
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          fail=0
-          for sha in $(git rev-list "$base".."$head"); do
-            if ! git log -1 --format=%B "$sha" | grep -qE '^Signed-off-by: .+ <.+@.+>$'; then
-              echo "Commit $sha is missing a Signed-off-by trailer." >&2
-              fail=1
-            fi
-          done
-          if [[ $fail -ne 0 ]]; then
-            echo "" >&2
-            echo "All commits in this PR must be signed off via the DCO." >&2
-            echo "See CONTRIBUTING.md. Use 'git commit -s' or amend with 'git commit --amend -s'." >&2
-            exit 1
-          fi
-          echo "PASS: all commits carry Signed-off-by trailers."

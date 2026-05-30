@@ -12,27 +12,6 @@ We do **not** accept unsolicited pull requests from outside the
 maintainer team. If you are a customer or partner with a change that
 must land upstream, contact IntentProof, Inc. before opening a PR.
 
-Maintainer commits use the Developer Certificate of Origin (DCO) below.
-
-## Developer Certificate of Origin (DCO)
-
-Merged commits in this repository use the
-[Developer Certificate of Origin 1.1](https://developercertificate.org/).
-
-Every commit must carry a `Signed-off-by:` trailer matching the
-author email. The easiest way to do this is to pass `-s` to `git
-commit`:
-
-```
-git commit -s -m "..."
-```
-
-By signing off, you certify that you have the right to submit the
-commit under the project's license. The full text of the DCO is at
-https://developercertificate.org/
-
-Commits without `Signed-off-by:` will be rejected by CI.
-
 ## Trademark
 
 "IntentProof" and "Verified by IntentProof" are trademarks of
