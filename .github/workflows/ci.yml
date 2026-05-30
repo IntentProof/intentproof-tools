@@ -124,6 +124,12 @@ jobs:
           ref: main
           path: intentproof-core
 
+      - name: Prefer sibling PR branch for spec
+        if: github.event_name == 'pull_request'
+        run: |
+          git -C intentproof-spec fetch origin "${{ github.head_ref }}" &&
+            git -C intentproof-spec checkout FETCH_HEAD || true
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
