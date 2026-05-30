@@ -60,9 +60,9 @@ if [[ -n "$spec_dir" && -f "$spec_dir/compatibility/pins.v1.json" ]]; then
     echo "jq is required to compare OSS-Fuzz pins with $pins_file" >&2
     exit 1
   fi
-  expected_tools="$(jq -r '.entries[] | select(.ref_kind=="oss_fuzz_tools_ref") | .sha' "$pins_file")"
-  expected_spec="$(jq -r '.spec_ref' "$pins_file")"
-  expected_core="$(jq -r '.entries[] | select(.ref_kind=="oss_fuzz_core_ref") | .sha' "$pins_file")"
+  expected_tools="$(normalize_sha "$(jq -r '.entries[] | select(.ref_kind=="oss_fuzz_tools_ref") | .sha' "$pins_file")")"
+  expected_spec="$(normalize_sha "$(jq -r '.spec_ref' "$pins_file")")"
+  expected_core="$(normalize_sha "$(jq -r '.entries[] | select(.ref_kind=="oss_fuzz_core_ref") | .sha' "$pins_file")")"
   actual_tools="$(normalize_sha "$TOOLS_REF")"
   actual_spec="$(normalize_sha "$SPEC_REF")"
   actual_core="$(normalize_sha "$CORE_REF")"
