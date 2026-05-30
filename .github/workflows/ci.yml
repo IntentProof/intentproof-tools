@@ -58,6 +58,9 @@ jobs:
       - name: Verify policy compiler against pinned spec schema
         run: INTENTPROOF_SPEC_DIR=./intentproof-spec ./scripts/check-spec-conformance.sh
 
+      - name: Verify OSS-Fuzz project pins match ecosystem manifest
+        run: INTENTPROOF_SPEC_DIR=./intentproof-spec bash ./scripts/check-oss-fuzz-project.sh
+
       - name: Validate release workflow contracts
         run: python3 ./scripts/check-release-workflows.py
 
