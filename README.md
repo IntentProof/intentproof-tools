@@ -26,7 +26,7 @@ related packages).
 brew tap IntentProof/tap && brew install intentproof intentproof-verify
 ```
 
-Release binaries and Cosign checks: see
+Release flow (`v*` tags): [release.md](docs/release.md). Cosign verification:
 [counterparty-verification.md](docs/counterparty-verification.md).
 
 ## Build and test
