@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Run Go policy/compiler tests against the pinned intentproof-spec checkout.
+set -euo pipefail
+
+SPEC_DIR="${1:-${INTENTPROOF_SPEC_DIR:-../intentproof-spec}}"
+
+if [[ ! -f "$SPEC_DIR/schema/policy.v1.schema.json" ]]; then
+  echo "spec schema not found at: $SPEC_DIR/schema/policy.v1.schema.json" >&2
+  exit 2
+fi
+
+SPEC_DIR_ABS="$(cd "$SPEC_DIR" && pwd)"
+
+INTENTPROOF_SPEC_DIR="$SPEC_DIR_ABS" \
+INTENTPROOF_DETERMINISTIC_TIME=1 \
+  go test ./pkg/policy -run 'TestPolicyCompilerMatchesSpecSchema|TestReferencePolicyFixturesMatchVerifier' -count=1
