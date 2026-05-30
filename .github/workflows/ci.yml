@@ -43,6 +43,11 @@ jobs:
           INTENTPROOF_SPEC_DIR: ${{ github.workspace }}/intentproof-spec
         run: go test -count=1 ./...
 
+      - name: Spec conformance (policy compiler vs pinned spec)
+        env:
+          INTENTPROOF_SPEC_DIR: ${{ github.workspace }}/intentproof-spec
+        run: bash scripts/check-spec-conformance.sh
+
       - name: Verify counterparty golden bundle stdout
         env:
           INTENTPROOF_SPEC_DIR: ${{ github.workspace }}/intentproof-spec
