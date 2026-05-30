@@ -26,7 +26,8 @@ related packages).
 brew tap IntentProof/tap && brew install intentproof intentproof-verify
 ```
 
-Release flow (`v*` tags): [release.md](docs/release.md). Cosign verification:
+Release flow (`v*` tags, manual Homebrew tap): [release.md](docs/release.md).
+Cosign verification:
 [counterparty-verification.md](docs/counterparty-verification.md).
 
 ## Build and test
