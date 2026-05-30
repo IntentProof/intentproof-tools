@@ -30,13 +30,10 @@ jobs:
           ref: ${{ steps.spec_ref.outputs.ref }}
           path: intentproof-spec
 
-      - name: Prefer sibling PR branch for spec pins
-        if: github.event_name == 'pull_request'
+      - name: Sync spec pins manifest for OSS-Fuzz check
         env:
-          PR_SIBLING_BRANCH: ${{ github.head_ref }}
-        run: |
-          git -C intentproof-spec fetch origin "$PR_SIBLING_BRANCH" &&
-            git -C intentproof-spec checkout FETCH_HEAD || true
+          PR_SIBLING_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
+        run: bash ./scripts/sync-spec-pins-manifest.sh intentproof-spec
 
       - uses: actions/setup-go@v5
         with:
@@ -107,14 +104,6 @@ jobs:
           repository: IntentProof/intentproof-spec
           ref: ${{ steps.spec_ref.outputs.ref }}
           path: intentproof-spec
-
-      - name: Prefer sibling PR branch for spec pins
-        if: github.event_name == 'pull_request'
-        env:
-          PR_SIBLING_BRANCH: ${{ github.head_ref }}
-        run: |
-          git -C intentproof-spec fetch origin "$PR_SIBLING_BRANCH" &&
-            git -C intentproof-spec checkout FETCH_HEAD || true
 
       - uses: actions/setup-go@v5
         with:
