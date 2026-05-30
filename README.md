@@ -15,8 +15,8 @@ depending on the hosted data plane.
 
 | Path | Purpose |
 |------|---------|
-| `cmd/intentproof-verify` | Pure-Go offline verifier. Takes a `.proof.tar.zst` bundle and prints pass/fail. See [`docs/counterparty-verification.md`](docs/counterparty-verification.md). |
-| `cmd/intentproof` | Developer CLI. `policy lint`, `policy test`, `policy diff`, `policy publish`, `policy activate`, `local`. |
+| `cmd/intentproof-verify` | Pure-Go offline verifier (`verify`, `explain`, `replay`). See [`docs/counterparty-verification.md`](docs/counterparty-verification.md). |
+| `cmd/intentproof` | Developer CLI (`demo refund`, `verify`, `explain`, `replay`, `policy`, `reference`, `local`). |
 | `cmd/intentproof-pkg-sign` | KMS-backed OpenPGP signing helper for package repository metadata. |
 | `pkg/verifier` | Deterministic DSL evaluator for the 7 canonical rule kinds. |
 | `pkg/bundle` | `.proof.tar.zst` build / extract / signature-verify. |
@@ -41,6 +41,10 @@ Verify release artifacts with Cosign before install. Counterparty bundle
 verification uses `intentproof-verify` — see
 [`docs/counterparty-verification.md`](docs/counterparty-verification.md).
 
+**Quick path (no account):** [`docs/offline-refund-verify.md`](docs/offline-refund-verify.md).
+
+**v0.1 contract:** [`docs/v0.1-local-contract.md`](docs/v0.1-local-contract.md).
+
 ## Test
 
 ```bash
@@ -48,9 +52,8 @@ go build ./...
 go test ./...
 ```
 
-CI runs tier-isolation checks, coverage gates, conformance fixtures, and
-cross-repo ecosystem pin checks (see
-[`intentproof-spec/compatibility/PINS.md`](https://github.com/IntentProof/intentproof-spec/blob/main/compatibility/PINS.md)).
+CI runs build, test, and counterparty golden verification (see
+[`docs/v0.1-local-contract.md`](docs/v0.1-local-contract.md)).
 
 ## Release
 
