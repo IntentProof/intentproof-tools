@@ -14,9 +14,9 @@ use today.
 |------|----------------|--------------|
 | `intentproof-tools` | Git tag only | GitHub Release archives (`intentproof`, `intentproof-verify`) |
 | `intentproof-spec` | `package.json` `1.0.0` | GitHub Release spec bundle + signed manifest |
-| `intentproof-sdk-node` | `package.json` `0.2.0` | npm `@intentproof/sdk` |
-| `intentproof-sdk-python` | `pyproject.toml` `0.1.0` | PyPI `intentproof` |
-| `intentproof-sdk-go` | Git tag only | Go module via proxy |
+| `intentproof-sdk-node` | `package.json` `0.2.1` | npm `@intentproof/sdk` |
+| `intentproof-sdk-python` | `pyproject.toml` `0.2.1` | PyPI `intentproof` |
+| `intentproof-sdk-go` | `SDKVersion` + Git tag `v0.2.0` | Go module via proxy |
 | `homebrew-tap` | Formula `version` field | Manual bump after tools release |
 
 Matrix `*_version` labels in `intentproof-spec` are tuple bookkeeping strings;
@@ -74,9 +74,9 @@ tag releases.
 
 | Repo | Tag example | Workflow |
 |------|-------------|----------|
-| `intentproof-sdk-node` | `v0.2.0` | `release-npm.yml` |
-| `intentproof-sdk-python` | `v0.1.0` | `release-pypi.yml` |
-| `intentproof-sdk-go` | `v0.2.0` (or chosen module tag) | `release-go.yml` |
+| `intentproof-sdk-node` | `v0.2.1` | `release-npm.yml` |
+| `intentproof-sdk-python` | `v0.2.1` | `release-pypi.yml` |
+| `intentproof-sdk-go` | `v0.2.0` | `release-go.yml` |
 
 Release jobs use the same conformance gates as CI (pinned spec via tools
 `SPEC_REF`). The workflow syncs npm version from the tag on pack; PyPI uses the
