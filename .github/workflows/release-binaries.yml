@@ -121,6 +121,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v8
         with:
           name: release-signing-metadata
@@ -135,4 +140,4 @@ jobs:
           set -euo pipefail
           mapfile -t files < <(find release-signing-metadata -type f | sort)
           test "${#files[@]}" -gt 0
-          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+          gh release upload "$RELEASE_TAG" --repo "$GH_REPO" "${files[@]}" --clobber
