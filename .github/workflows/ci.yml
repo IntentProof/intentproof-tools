@@ -11,7 +11,7 @@ jobs:
     name: "IntentProof CI: Build and Test"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Read pinned spec ref
         id: spec_ref
@@ -24,7 +24,7 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Checkout intentproof-spec at pinned ref
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: IntentProof/intentproof-spec
           ref: ${{ steps.spec_ref.outputs.ref }}
